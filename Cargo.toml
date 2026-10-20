@@ -49,6 +49,8 @@ libc = "0.2"
 [dev-dependencies]
 # Signs test builds for the update tests, as tools/release does for real ones.
 minisign = "0.7"
+# Writes the game messages the capture test sends after a recorded login; reliquary's own version.
+protobuf = "=3.7.1"
 roxmltree = "0.20"
 
 [build-dependencies]

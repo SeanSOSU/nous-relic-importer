@@ -131,3 +131,102 @@ pub async fn run(hub: Hub, frames: impl Stream<Item = Vec<u8>> + Unpin) {
     warn!("capture ended");
     hub.set_status(Status::Failed("Packet capture stopped".into()));
 }
+
+#[cfg(test)]
+mod tests {
+    use protobuf::Message;
+    use reliquary::network::command::GameCommand;
+    use reliquary::network::command::command_id;
+    use reliquary::network::command::proto::GetBagScRsp::GetBagScRsp;
+    use reliquary::network::command::proto::PlayerSyncScNotify::PlayerSyncScNotify;
+    use sync_core::frames::{HEAD_MAGIC, TAIL_MAGIC};
+    use sync_core::packets::{EMULATOR_PORT, TcpStream, Transport, ip_in_ethernet, transport};
+
+    use super::Decoder;
+    use crate::hub::{Hub, Status};
+
+    /// The frames of a little-endian microsecond pcap, as the recorder writes them.
+    fn pcap_frames(file: &[u8]) -> Vec<&[u8]> {
+        let (mut frames, mut at) = (Vec::new(), 24);
+        while at + 16 <= file.len() {
+            let len = u32::from_le_bytes(file[at + 8..at + 12].try_into().unwrap()) as usize;
+            frames.push(&file[at + 16..at + 16 + len]);
+            at += 16 + len;
+        }
+        frames
+    }
+
+    fn game_frame(command: u16, body: &[u8]) -> Vec<u8> {
+        let mut frame = HEAD_MAGIC.to_vec();
+        frame.extend(command.to_be_bytes());
+        frame.extend(0u16.to_be_bytes());
+        frame.extend((body.len() as u32).to_be_bytes());
+        frame.extend(body);
+        frame.extend(TAIL_MAGIC);
+        frame
+    }
+
+    /// The server's next TCP segment on `template`'s connection, carrying `payload` from `seq`.
+    fn next_segment(template: &[u8], seq: u32, payload: &[u8]) -> Vec<u8> {
+        let ip_at = template.len() - ip_in_ethernet(template).unwrap().1.len();
+        let ip_header = usize::from(template[ip_at] & 0x0f) * 4;
+        let tcp_at = ip_at + ip_header;
+        let tcp_header = usize::from(template[tcp_at + 12] >> 4) * 4;
+        let mut segment = template[..tcp_at + tcp_header].to_vec();
+        segment[ip_at + 2..ip_at + 4].copy_from_slice(&((ip_header + tcp_header + payload.len()) as u16).to_be_bytes());
+        segment[tcp_at + 4..tcp_at + 8].copy_from_slice(&seq.to_be_bytes());
+        segment.extend(payload);
+        segment
+    }
+
+    #[test]
+    fn relics_that_change_after_login_reach_open_pages_as_they_happen() {
+        let pcap = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/decoder/tests/emulator-login.pcap")).unwrap();
+        let (hub, mut decoder) = (Hub::new(None), Decoder::default());
+        // The recorded login, through the capture's own path; alongside, a relic from the bag the server sent,
+        // and where the server's stream ends.
+        let (mut stream, mut bag, mut end) = (TcpStream::default(), None, None);
+        for frame in pcap_frames(&pcap) {
+            if let Some(Transport::Tcp { src: EMULATOR_PORT, seq, syn, payload, .. }) = ip_in_ethernet(frame).map(|(_, ip)| transport(ip)) {
+                if !payload.is_empty() {
+                    end = Some((frame.to_vec(), seq.wrapping_add(payload.len() as u32)));
+                }
+                for command in stream.push(seq, syn, payload).into_iter().filter_map(|f| GameCommand::try_new(f).ok()) {
+                    if command.command_id == command_id::GetBagScRsp {
+                        bag = command.parse_proto::<GetBagScRsp>().ok();
+                    }
+                }
+            }
+            decoder.frame(&hub, frame.to_vec());
+        }
+        assert!(matches!(*hub.status().borrow(), Status::Synced { relics: 558, fresh: true, .. }));
+        let (bag, (template, mut seq)) = (bag.unwrap(), end.unwrap());
+        let (_, mut pages) = hub.subscribe();
+        let mut send = |sync: PlayerSyncScNotify| {
+            let frame = game_frame(command_id::PlayerSyncScNotify, &sync.write_to_bytes().unwrap());
+            decoder.frame(&hub, next_segment(&template, seq, &frame));
+            seq = seq.wrapping_add(frame.len() as u32);
+        };
+
+        // A relic the account did not have: the server's update after a drop.
+        let mut gained = bag.relic_list[0].clone();
+        (gained.unique_id, gained.level, gained.equip_avatar_id) = (9_000_001, 0, 0);
+        let mut sync = PlayerSyncScNotify::new();
+        sync.relic_list.push(gained);
+        send(sync);
+        let update = pages.try_recv().expect("the page gets the change, with no new login");
+        assert!(update.contains(r#""event":"UpdateRelics""#) && update.contains("9000001"), "{update}");
+        assert_eq!(hub.summary().unwrap().relics, 559);
+
+        // One the account had, upgraded: changed in place, not added.
+        let mut upgraded = bag.relic_list[1].clone();
+        upgraded.level = 15;
+        let mut sync = PlayerSyncScNotify::new();
+        sync.relic_list.push(upgraded.clone());
+        send(sync);
+        let update = pages.try_recv().unwrap();
+        assert!(update.contains(&upgraded.unique_id.to_string()) && update.contains(r#""level":15"#), "{update}");
+        assert_eq!(hub.summary().unwrap().relics, 559);
+        assert!(matches!(*hub.status().borrow(), Status::Synced { relics: 559, fresh: true, .. }));
+    }
+}

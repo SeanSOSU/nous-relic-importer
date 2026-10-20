@@ -1984,6 +1984,7 @@ dependencies = [
  "minisign-verify",
  "open",
  "pktmon",
+ "protobuf",
  "reliquary",
  "roxmltree",
  "serde",
