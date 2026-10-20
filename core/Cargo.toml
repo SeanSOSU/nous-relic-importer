@@ -1,0 +1,23 @@
+[package]
+name = "sync-core"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "What the StarRailSim Sync app and its capture-file decoder share: the inventory exporter and the game-frame reader"
+
+[dependencies]
+# Keep this tag the same as the app's and the decoder's; tools/update-exporter.ps1 prints the one to use.
+reliquary = { git = "https://github.com/IceDynamix/reliquary", tag = "v24.0.0", features = ["proto-rqa"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_with = "3"
+tokio = { version = "1", features = ["sync"], optional = true }
+tracing = "0.1"
+
+[build-dependencies]
+reliquary = { git = "https://github.com/IceDynamix/reliquary", tag = "v24.0.0", features = ["proto-rqa"] }
+ureq = { version = "2.12.1", features = ["json"] }
+
+[features]
+# Live update events from the vendored exporter (src/export), which gates them on this feature.
+stream = ["dep:tokio"]

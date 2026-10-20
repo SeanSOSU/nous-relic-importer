@@ -10,9 +10,6 @@ mod app;
 mod capture;
 #[cfg(windows)]
 mod emulator;
-// Vendored from Reliquary Archiver as-is (see src/export/VENDORED); not every part of it is used here.
-#[allow(dead_code, unused_imports, unused_variables)]
-mod export;
 mod hub;
 #[cfg(windows)]
 mod install;

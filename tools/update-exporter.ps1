@@ -1,11 +1,11 @@
-# Copies Reliquary Archiver's inventory exporter (src/export, MIT) into src/export at a release tag.
+# Copies Reliquary Archiver's inventory exporter (src/export, MIT) into core/src/export at a release tag.
 # Run once per game patch, after the archiver has released for it:
 #
 #   .\tools\update-exporter.ps1 v0.20.0
 #
-# then set the same `reliquary` tag in Cargo.toml that the archiver's Cargo.toml uses at that release (the
-# script prints it), and rebuild. If the script reports that the archiver's build.rs changed, mirror the
-# change in our build.rs: that is where the game tables the exporter reads are downloaded.
+# then set the `reliquary` tag the script prints on every `reliquary` entry (Cargo.toml, core/Cargo.toml,
+# decoder/Cargo.toml) and rebuild. If the script reports that the archiver's build.rs changed, mirror the
+# change in core/build.rs: that is where the game tables the exporter reads are downloaded.
 param([Parameter(Mandatory = $true)][string]$Tag)
 $ErrorActionPreference = "Stop"
 
@@ -23,11 +23,11 @@ $files = @(
 )
 
 foreach ($file in $files) {
-    $target = Join-Path $root $file
+    $target = Join-Path $root "core/$file"
     New-Item -ItemType Directory -Force (Split-Path -Parent $target) | Out-Null
     Invoke-WebRequest -UseBasicParsing "$raw/$file" -OutFile $target
 }
-[System.IO.File]::WriteAllText((Join-Path $root "src/export/VENDORED"), @"
+[System.IO.File]::WriteAllText((Join-Path $root "core/src/export/VENDORED"), @"
 Copied from https://github.com/IceDynamix/reliquary-archiver at tag $Tag (MIT, IceDynamix and contributors).
 Do not edit these files: re-run tools/update-exporter.ps1 <tag> instead.
 

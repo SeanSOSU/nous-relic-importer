@@ -7,8 +7,8 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use crate::export::Exporter;
-use crate::export::fribbels::{OptimizerEvent, OptimizerExporter};
+use sync_core::export::Exporter;
+use sync_core::export::fribbels::{OptimizerEvent, OptimizerExporter};
 use tokio::sync::{broadcast, watch};
 use tracing::{info, warn};
 
