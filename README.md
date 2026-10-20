@@ -40,6 +40,17 @@ Logs: `%LOCALAPPDATA%\StarRailSim Sync\sync.log`.
 | `--headless` | No tray icon and no window (for automated checks) |
 | `--uninstall` | Remove the installed copy (what Installed apps runs) |
 | `--background` | Start without the window (what the sign-in task passes) |
+| `--emulator` | Test against the PearlSR emulator instead of the live game (no admin, nothing installed) |
+
+## Testing without a live account
+
+Start the PearlSR lab stack with the client (`hsr-harnessestart-lab.ps1 -LaunchClient`), then run
+`starrailsim-sync.exe --emulator` before the client logs in. PearlSR speaks the live game's protocol (same
+command ids and protobufs as the `reliquary` tag here) but over plain TCP on loopback with no encryption, which
+packet capture cannot see. So this mode relays the client's connection instead: it listens on
+`127.0.0.1:23301`, which Windows prefers over PearlSR's `0.0.0.0:23301`, passes everything through to PearlSR
+on `127.0.0.2`, and reads the account on the way. Relics that arrive without substats are configured that way
+in PearlSR's `config.json`.
 
 ## Building
 

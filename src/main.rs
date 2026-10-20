@@ -3,9 +3,13 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 #[cfg(windows)]
+mod accounts;
+#[cfg(windows)]
 mod app;
 #[cfg(windows)]
 mod capture;
+#[cfg(windows)]
+mod emulator;
 // Vendored from Reliquary Archiver as-is (see src/export/VENDORED); not every part of it is used here.
 #[allow(dead_code, unused_imports, unused_variables)]
 mod export;
@@ -37,6 +41,9 @@ struct Options {
     uninstall: bool,
     /// No tray icon and no window: for automated checks.
     headless: bool,
+    /// Test against the PearlSR emulator: relay its client's TCP connection instead of capturing the live
+    /// game (no admin needed, nothing installed).
+    emulator: bool,
 }
 
 impl Options {
@@ -50,6 +57,7 @@ impl Options {
             portable: false,
             uninstall: false,
             headless: false,
+            emulator: false,
         };
         let mut args = std::env::args().skip(1);
         while let Some(arg) = args.next() {
@@ -59,6 +67,7 @@ impl Options {
                 "--portable" => options.portable = true,
                 "--uninstall" => options.uninstall = true,
                 "--headless" => options.headless = true,
+                "--emulator" => options.emulator = true,
                 "--site" => options.site = args.next().unwrap_or(options.site),
                 "--allow-origin" => options.allow_origins.extend(args.next()),
                 "--replay" => options.replay = args.next().map(PathBuf::from),
@@ -130,7 +139,7 @@ fn main() {
         return;
     }
 
-    if options.replay.is_none() {
+    if options.replay.is_none() && !options.emulator {
         // This same build is already running: running it again brings its window up, without a UAC prompt.
         if win::SingleInstance::other_running() && (install::running_installed() || install::installed_is_current()) {
             if !win::Signal::send(win::Signal::SHOW) {
@@ -197,6 +206,7 @@ fn main() {
         let hub = hub.clone();
         let origins = options.allow_origins.clone();
         let replay = options.replay.clone();
+        let emulator = options.emulator;
         std::thread::spawn(move || {
             let runtime = tokio::runtime::Builder::new_multi_thread()
                 .worker_threads(2)
@@ -210,6 +220,9 @@ fn main() {
                         Ok(Ok(export)) => hub.publish_saved(export),
                         _ => hub.set_status(hub::Status::Failed(format!("could not read {}", path.display()))),
                     },
+                    None if emulator => {
+                        tokio::spawn(emulator::run(hub.clone()));
+                    }
                     None => {
                         tokio::spawn(capture::run(hub.clone()));
                     }
