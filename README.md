@@ -44,7 +44,7 @@ Logs: `%LOCALAPPDATA%\StarRailSim Sync\sync.log`.
 
 ## Testing without a live account
 
-Start the PearlSR lab stack with the client (`hsr-harnessestart-lab.ps1 -LaunchClient`), then run
+Start the PearlSR lab stack with the client (`hsr-harness\restart-lab.ps1 -LaunchClient`), then run
 `starrailsim-sync.exe --emulator` before the client logs in. PearlSR speaks the live game's protocol (same
 command ids and protobufs as the `reliquary` tag here) but over plain TCP on loopback with no encryption, which
 packet capture cannot see. So this mode relays the client's connection instead: it listens on
