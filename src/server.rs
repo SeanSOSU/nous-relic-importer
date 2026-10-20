@@ -28,10 +28,14 @@ struct ServerState {
     extra_origins: Vec<String>,
 }
 
-pub async fn serve(hub: Hub, port: u16, extra_origins: Vec<String>) -> std::io::Result<()> {
-    let app = Router::new()
+/// `pages`: more routes on the same port (the window page, where the window opens in a browser).
+pub async fn serve(hub: Hub, port: u16, extra_origins: Vec<String>, pages: Option<Router>) -> std::io::Result<()> {
+    let mut app = Router::new()
         .route("/ws", get(upgrade))
         .with_state(ServerState { hub, extra_origins });
+    if let Some(pages) = pages {
+        app = app.merge(pages);
+    }
     let listener = tokio::net::TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, port))).await?;
     info!(port, "listening");
     axum::serve(listener, app).await

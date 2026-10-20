@@ -13,90 +13,10 @@ use reliquary::network::command::{GameCommand, GameCommandError};
 use reliquary::network::{GamePacket, GameSniffer, NetworkError};
 use sync_core::export::Exporter;
 use sync_core::export::fribbels::OptimizerExporter;
-use sync_core::frames::frames;
+use sync_core::packets::{EMULATOR_PORT, TcpStream, Transport, ethernet_frame, transport};
 
 mod capture;
 use capture::{Packet, ip_packet, read_capture};
-
-const GAME_PORTS: [u16; 2] = [23301, 23302];
-const EMULATOR_PORT: u16 = 23301;
-
-enum Transport<'a> {
-    Udp { src: u16, dst: u16 },
-    Tcp { src: u16, dst: u16, seq: u32, syn: bool, payload: &'a [u8] },
-    Other,
-}
-
-fn transport(ip: &[u8]) -> Transport<'_> {
-    let (protocol, l4) = match ip.first().map(|b| b >> 4) {
-        Some(4) => {
-            let header = usize::from(ip[0] & 0x0f) * 4;
-            let total = ip.get(2..4).map_or(ip.len(), |b| usize::from(u16::from_be_bytes([b[0], b[1]])));
-            (ip.get(9).copied(), ip.get(header..total.min(ip.len())))
-        }
-        Some(6) => {
-            let length = ip.get(4..6).map_or(0, |b| usize::from(u16::from_be_bytes([b[0], b[1]])));
-            (ip.get(6).copied(), ip.get(40..(40 + length).min(ip.len())))
-        }
-        _ => return Transport::Other,
-    };
-    let Some(l4) = l4.filter(|l| l.len() >= 8) else { return Transport::Other };
-    let (src, dst) = (u16::from_be_bytes([l4[0], l4[1]]), u16::from_be_bytes([l4[2], l4[3]]));
-    match protocol {
-        Some(17) => Transport::Udp { src, dst },
-        Some(6) if l4.len() >= 20 => {
-            let offset = usize::from(l4[12] >> 4) * 4;
-            Transport::Tcp {
-                src,
-                dst,
-                seq: u32::from_be_bytes([l4[4], l4[5], l4[6], l4[7]]),
-                syn: l4[13] & 0x02 != 0,
-                payload: l4.get(offset..).unwrap_or_default(),
-            }
-        }
-        _ => Transport::Other,
-    }
-}
-
-/// One direction of one TCP connection, put back in order.
-#[derive(Default)]
-struct TcpStream {
-    next_seq: Option<u32>,
-    buffer: Vec<u8>,
-}
-
-impl TcpStream {
-    fn push(&mut self, seq: u32, syn: bool, payload: &[u8]) -> Vec<Vec<u8>> {
-        let seq = if syn {
-            self.buffer.clear();
-            self.next_seq = Some(seq.wrapping_add(1));
-            seq.wrapping_add(1)
-        } else {
-            seq
-        };
-        if payload.is_empty() {
-            return Vec::new();
-        }
-        match self.next_seq {
-            Some(next) if seq == next => self.buffer.extend_from_slice(payload),
-            // A resend overlapping bytes already taken: keep only what is new.
-            Some(next) if (next.wrapping_sub(seq) as i32) > 0 => {
-                let taken = next.wrapping_sub(seq) as usize;
-                if taken >= payload.len() {
-                    return Vec::new();
-                }
-                self.buffer.extend_from_slice(&payload[taken..]);
-            }
-            // First sight of the stream, or a gap: start over and resynchronise on the next frame.
-            _ => {
-                self.buffer.clear();
-                self.buffer.extend_from_slice(payload);
-            }
-        }
-        self.next_seq = Some(seq.wrapping_add(payload.len() as u32));
-        frames(&mut self.buffer)
-    }
-}
 
 #[derive(Default)]
 struct Decoder {
@@ -145,14 +65,9 @@ pub fn decode(capture: &[u8]) -> Result<String, String> {
     for Packet { link, data } in packets {
         let Some((ethertype, ip)) = ip_packet(link, data) else { continue };
         match transport(ip) {
-            Transport::Udp { src, dst } if GAME_PORTS.contains(&src) || GAME_PORTS.contains(&dst) => {
+            udp if udp.is_game() => {
                 decoder.game_packets += 1;
-                // reliquary reads Ethernet frames; a capture of an app's traffic is often bare IP.
-                let mut frame = Vec::with_capacity(14 + ip.len());
-                frame.extend_from_slice(&[0; 12]);
-                frame.extend_from_slice(&ethertype.to_be_bytes());
-                frame.extend_from_slice(ip);
-                let packets = match sniffer.receive_packet(frame) {
+                let packets = match sniffer.receive_packet(ethernet_frame(ethertype, ip)) {
                     Ok(packets) => packets,
                     Err(NetworkError::GameCommand(GameCommandError::DecryptionKeyMissing)) => {
                         decoder.key_missing += 1;

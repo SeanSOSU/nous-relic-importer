@@ -97,15 +97,7 @@ fn by_version(ip: &[u8]) -> Option<(u16, &[u8])> {
 pub fn ip_packet(link: u32, data: &[u8]) -> Option<(u16, &[u8])> {
     match link {
         // Ethernet, possibly VLAN-tagged.
-        1 => {
-            let mut ethertype = u16::from_be_bytes([*data.get(12)?, *data.get(13)?]);
-            let mut start = 14;
-            if ethertype == 0x8100 {
-                ethertype = u16::from_be_bytes([*data.get(16)?, *data.get(17)?]);
-                start = 18;
-            }
-            matches!(ethertype, 0x0800 | 0x86dd).then_some((ethertype, data.get(start..)?))
-        }
+        1 => sync_core::packets::ip_in_ethernet(data),
         // Raw IP: PCAPdroid on Android, macOS rvictl and many tcpdump captures.
         12 | 14 | 101 => by_version(data),
         228 => Some((0x0800, data)),

@@ -4,10 +4,10 @@ Keeps [StarRailSim](https://starrailsim.com)'s relic inventory in step with your
 reads the game's own network traffic on your PC, so every relic, light cone and character comes in without an
 export file, and changes you make in game show up on the site as they happen.
 
-Windows only. Nothing leaves your PC: the site connects to the app at `ws://127.0.0.1:23314/ws`, and only
-StarRailSim's own pages may open that socket.
+Windows and Linux (the Steam Deck included). Nothing leaves your computer: the site connects to the app at
+`ws://127.0.0.1:23314/ws`, and only StarRailSim's own pages may open that socket.
 
-## Using it
+## Using it on Windows
 
 1. Run `starrailsim-sync.exe` and accept the administrator prompt. Reading packets with Windows' built-in
    packet monitor (pktmon) needs it.
@@ -29,6 +29,27 @@ the sign-in task, the shortcut and the logs.
 
 Logs: `%LOCALAPPDATA%\StarRailSim Sync\sync.log`.
 
+## Using it on Linux
+
+One file, `starrailsim-sync`, a static x86_64 build that runs on any distribution with nothing else installed.
+
+1. Mark it executable (file manager: Properties > Permissions, "Allow executing as program") and open it.
+2. It installs itself to `~/.local/share/starrailsim-sync`, adds itself to the app menu and to the desktop's
+   login autostart, then asks for your password once, through the desktop's own prompt (polkit), to give the
+   installed copy one capability: CAP_NET_RAW, for reading packets. It opens StarRailSim's Import page; turn
+   on sync there.
+3. Start the game and click to start, as on Windows.
+
+The capability stays on the file, so later starts ask nothing; the app opens its packet socket first thing,
+then drops the capability. Its tray icon (KDE and the Steam Deck's desktop mode, or GNOME with the
+AppIndicator extension Ubuntu ships) works like the Windows one. Its window is the same page, opened in your
+browser from the app itself at `http://127.0.0.1:23314/` with a token only the app hands out; starting the app
+again from the app menu opens it, tray or not. An update replaces the file, so it asks for the password again.
+Uninstall from the app menu entry's **Uninstall** action, or with **Uninstall** in the window.
+
+On a Steam Deck the `deck` user has no password until you set one (`passwd` in Konsole), and the app runs in
+desktop mode only. Logs and the saved account: `~/.local/state/starrailsim-sync`.
+
 ## Options
 
 | Argument | Effect |
@@ -41,6 +62,7 @@ Logs: `%LOCALAPPDATA%\StarRailSim Sync\sync.log`.
 | `--uninstall` | Remove the installed copy (what Installed apps runs) |
 | `--background` | Start without the window (what the sign-in task passes) |
 | `--emulator` | Test against the PearlSR emulator instead of the live game (no admin, nothing installed) |
+| `--grant-capture` | Linux: what the password prompt runs, as root, to give the installed copy CAP_NET_RAW |
 
 ## Testing without a live account
 
@@ -61,18 +83,34 @@ cargo build --release
 The build downloads the game's resource tables (through Reliquary Archiver's build script), so it needs network
 access.
 
+Linux, in Docker (the image is the build environment and the test bench), from the repo:
+
+```
+docker build -t starrailsim-sync-linux -f tools/linux.Dockerfile tools
+docker run --rm --cpus 2 -v "$PWD:/src:ro" -v srs-cargo:/usr/local/cargo/registry -v srs-git:/usr/local/cargo/git \
+  -v srs-target:/target -e CARGO_TARGET_DIR=/target -w /src starrailsim-sync-linux \
+  cargo build --locked --release --target x86_64-unknown-linux-musl
+```
+
+`tools/linux-e2e.sh <binary> decoder/tests/emulator-login.pcap`, run as root in the same image, tests the
+whole Linux path: a normal user's first run installs and is granted the capability (through a stand-in
+`pkexec`), the recorded emulator login is replayed onto loopback, and the site's socket and the window page
+must both have the account; then it quits and uninstalls. The packet socket's own test needs CAP_NET_RAW:
+`cargo test -- --ignored` as root there.
+
 **Every game patch** changes the game's protocol. Once Reliquary Archiver has released for the patch:
 
-1. `.\tools\update-exporter.ps1 <archiver tag>` re-copies its exporter into `src/export` and prints the
+1. `.\tools\update-exporter.ps1 <archiver tag>` re-copies its exporter into `core/src/export` and prints the
    `reliquary` tag that release builds on.
-2. Set that tag on both `reliquary` entries in `Cargo.toml` (dependency and build-dependency).
-3. If the script warns that the archiver's `build.rs` changed, mirror its downloads in ours.
-4. `cargo test`, `cargo build --release`, and publish the new `starrailsim-sync.exe`.
+2. Set that tag on every `reliquary` entry: `Cargo.toml`, `core/Cargo.toml` (dependency and
+   build-dependency) and `decoder/Cargo.toml`.
+3. If the script warns that the archiver's `build.rs` changed, mirror its downloads in `core/build.rs`.
+4. `cargo test`, the release builds, and publish the new `starrailsim-sync.exe` and Linux `starrailsim-sync`.
 
 Until then a new client's traffic cannot be decoded.
 
-`src/export` is vendored rather than used as a dependency because the archiver's build script links its own
-icon and version details into anything that depends on it.
+`core/src/export` is vendored rather than used as a dependency because the archiver's build script links its
+own icon and version details into anything that depends on it.
 
 ## The capture-file decoder
 
@@ -92,5 +130,5 @@ only) and is decoded by `cargo test -p sync-decoder`.
 
 The packet decoding and the inventory export are [Reliquary](https://github.com/IceDynamix/reliquary) and
 [Reliquary Archiver](https://github.com/IceDynamix/reliquary-archiver) by IceDynamix and contributors (MIT).
-`src/export` is copied from Reliquary Archiver unchanged, and `src/capture.rs` and `build.rs` are adapted
-from it.
+`core/src/export` is copied from Reliquary Archiver unchanged, and `src/capture.rs` and `core/build.rs` are
+adapted from it.

@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="referrer" content="no-referrer">
 <title>StarRailSim Sync</title>
 <style>
   :root {
@@ -17,8 +18,11 @@
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; }
+  html { background: radial-gradient(120% 60% at 50% -10%, rgba(25, 158, 112, 0.18), transparent 60%), var(--page); }
+  /* In a browser tab (Linux) the page keeps the window's width, centred. */
   body {
-    background: radial-gradient(120% 60% at 50% -10%, rgba(25, 158, 112, 0.18), transparent 60%), var(--page);
+    max-width: 460px;
+    margin: 0 auto;
     color: var(--ink);
     font: 14px/1.5 system-ui, "Segoe UI", sans-serif;
     user-select: none;
@@ -121,13 +125,13 @@
   <section class="settings">
     <label class="toggle" id="startup-label">
       <input type="checkbox" id="startup">
-      Start with Windows
+      <span id="startup-text">Start with Windows</span>
     </label>
     <p class="hint" id="startup-hint"></p>
   </section>
 
   <footer>
-    <p>Closing this window keeps sync running in the notification area. <span id="version"></span></p>
+    <p>Closing this window keeps sync running in the background. <span id="version"></span></p>
     <button type="button" id="saved-file" hidden>Saved file</button>
     <button type="button" id="uninstall" hidden>Uninstall</button>
     <button type="button" id="quit">Quit</button>
@@ -135,8 +139,25 @@
 
 <script>
   const $ = (id) => document.getElementById(id);
-  const send = (message) => window.ipc.postMessage(message);
   const TONES = { ok: "#199e70", warn: "#d9a441", idle: "#8a8f98" };
+
+  // In a browser (the Linux app opens its window there) the app's local socket stands in for the web view's
+  // bridge. The page's own address carries the token the socket asks for.
+  if (!window.ipc && location.protocol === "http:") {
+    const waiting = [];
+    const socket = new WebSocket(`ws://${location.host}/ui${location.search}`);
+    socket.onopen = () => waiting.splice(0).forEach((m) => socket.send(m));
+    socket.onmessage = (e) => window.render(JSON.parse(e.data));
+    socket.onclose = () => {
+      $("headline").textContent = "StarRailSim Sync is not running";
+      $("detail").textContent = "Start it from your app menu, then reload this page.";
+      document.documentElement.style.setProperty("--tone", TONES.warn);
+      Object.assign($("dot").dataset, { tone: "warn", live: "false" });
+      document.querySelectorAll("button, input").forEach((el) => (el.disabled = true));
+    };
+    window.ipc = { postMessage: (m) => (socket.readyState === WebSocket.OPEN ? socket.send(m) : waiting.push(m)) };
+  }
+  const send = (message) => window.ipc && window.ipc.postMessage(message);
 
   // StarRailRes art, the same sources the site uses: jsDelivr first, GitHub raw when an edge refuses.
   const ART = ["https://cdn.jsdelivr.net/gh/Mar-7th/StarRailRes@master/", "https://raw.githubusercontent.com/Mar-7th/StarRailRes/master/"];
@@ -211,11 +232,12 @@
       }
     }
 
+    $("startup-text").textContent = s.startupLabel || "Start with Windows";
     $("startup").checked = s.startup;
     $("startup").disabled = !s.installed;
     $("startup-label").setAttribute("aria-disabled", String(!s.installed));
     $("startup-hint").textContent = s.installed
-      ? "Starts quietly when you sign in, so it is already running before you open the game."
+      ? s.startupHint || "Starts quietly when you sign in, so it is already running before you open the game."
       : "Available once installed: run the downloaded file without --portable.";
     $("uninstall").hidden = !s.installed;
     $("saved-file").hidden = !s.savedFile;
@@ -227,7 +249,7 @@
   $("startup").addEventListener("change", (e) => send(e.target.checked ? "startup-on" : "startup-off"));
   $("quit").addEventListener("click", () => send("quit"));
   $("uninstall").addEventListener("click", () => {
-    if (confirm("Uninstall StarRailSim Sync? It stops syncing and removes itself from this PC.")) send("uninstall");
+    if (confirm("Uninstall StarRailSim Sync? It stops syncing and removes itself from this computer.")) send("uninstall");
   });
   document.addEventListener("contextmenu", (e) => e.preventDefault());
   send("ready");

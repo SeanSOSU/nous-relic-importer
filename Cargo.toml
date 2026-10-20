@@ -38,6 +38,10 @@ windows-sys = { version = "0.61", features = [
     "Win32_UI_WindowsAndMessaging",
 ] }
 
+[target.'cfg(target_os = "linux")'.dependencies]
+ksni = "0.3.6"
+libc = "0.2"
+
 [dev-dependencies]
 roxmltree = "0.20"
 
