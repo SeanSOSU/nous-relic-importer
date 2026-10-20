@@ -134,8 +134,11 @@ pub async fn run(hub: Hub, frames: impl Stream<Item = Vec<u8>> + Unpin) {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use protobuf::Message;
     use reliquary::network::command::GameCommand;
+    use serde_json::Value;
     use reliquary::network::command::command_id;
     use reliquary::network::command::proto::GetBagScRsp::GetBagScRsp;
     use reliquary::network::command::proto::PlayerSyncScNotify::PlayerSyncScNotify;
@@ -179,54 +182,136 @@ mod tests {
         segment
     }
 
-    #[test]
-    fn relics_that_change_after_login_reach_open_pages_as_they_happen() {
-        let pcap = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/decoder/tests/emulator-login.pcap")).unwrap();
-        let (hub, mut decoder) = (Hub::new(None), Decoder::default());
-        // The recorded login, through the capture's own path; alongside, a relic from the bag the server sent,
-        // and where the server's stream ends.
-        let (mut stream, mut bag, mut end) = (TcpStream::default(), None, None);
-        for frame in pcap_frames(&pcap) {
-            if let Some(Transport::Tcp { src: EMULATOR_PORT, seq, syn, payload, .. }) = ip_in_ethernet(frame).map(|(_, ip)| transport(ip)) {
-                if !payload.is_empty() {
-                    end = Some((frame.to_vec(), seq.wrapping_add(payload.len() as u32)));
-                }
-                for command in stream.push(seq, syn, payload).into_iter().filter_map(|f| GameCommand::try_new(f).ok()) {
-                    if command.command_id == command_id::GetBagScRsp {
-                        bag = command.parse_proto::<GetBagScRsp>().ok();
+    /// The recorded emulator login, through the capture's own path, and what a test needs to carry on as the
+    /// server: the bag it sent, and where its stream ends.
+    struct Session {
+        hub: Hub,
+        decoder: Decoder,
+        bag: GetBagScRsp,
+        template: Vec<u8>,
+        seq: u32,
+    }
+
+    impl Session {
+        fn logged_in() -> Self {
+            let pcap = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/decoder/tests/emulator-login.pcap")).unwrap();
+            let (hub, mut decoder) = (Hub::new(None), Decoder::default());
+            let (mut stream, mut bag, mut end) = (TcpStream::default(), None, None);
+            for frame in pcap_frames(&pcap) {
+                if let Some(Transport::Tcp { src: EMULATOR_PORT, seq, syn, payload, .. }) = ip_in_ethernet(frame).map(|(_, ip)| transport(ip)) {
+                    if !payload.is_empty() {
+                        end = Some((frame.to_vec(), seq.wrapping_add(payload.len() as u32)));
+                    }
+                    for command in stream.push(seq, syn, payload).into_iter().filter_map(|f| GameCommand::try_new(f).ok()) {
+                        if command.command_id == command_id::GetBagScRsp {
+                            bag = command.parse_proto::<GetBagScRsp>().ok();
+                        }
                     }
                 }
+                decoder.frame(&hub, frame.to_vec());
             }
-            decoder.frame(&hub, frame.to_vec());
+            assert!(matches!(*hub.status().borrow(), Status::Synced { relics: 558, fresh: true, .. }));
+            let (template, seq) = end.unwrap();
+            Session { hub, decoder, bag: bag.unwrap(), template, seq }
         }
-        assert!(matches!(*hub.status().borrow(), Status::Synced { relics: 558, fresh: true, .. }));
-        let (bag, (template, mut seq)) = (bag.unwrap(), end.unwrap());
-        let (_, mut pages) = hub.subscribe();
-        let mut send = |sync: PlayerSyncScNotify| {
+
+        /// `sync` as the server's next message on the same connection, as it comes after a change in game.
+        fn send(&mut self, sync: PlayerSyncScNotify) {
             let frame = game_frame(command_id::PlayerSyncScNotify, &sync.write_to_bytes().unwrap());
-            decoder.frame(&hub, next_segment(&template, seq, &frame));
-            seq = seq.wrapping_add(frame.len() as u32);
-        };
+            self.decoder.frame(&self.hub, next_segment(&self.template, self.seq, &frame));
+            self.seq = self.seq.wrapping_add(frame.len() as u32);
+        }
+
+        /// The account a page opened now would start from.
+        fn account(&self) -> Value {
+            serde_json::from_str::<Value>(&self.hub.snapshot().unwrap()).unwrap()["data"].clone()
+        }
+    }
+
+    /// Who wears each item of an export list, by `_uid`.
+    fn wearers(items: &Value) -> HashMap<String, String> {
+        let text = |v: &Value| v.as_str().map_or_else(|| v.to_string(), str::to_owned);
+        items.as_array().unwrap().iter().map(|item| (text(&item["_uid"]), text(&item["location"]))).collect()
+    }
+
+    #[test]
+    fn relics_that_change_after_login_reach_open_pages_as_they_happen() {
+        let mut session = Session::logged_in();
+        let (_, mut pages) = session.hub.subscribe();
 
         // A relic the account did not have: the server's update after a drop.
-        let mut gained = bag.relic_list[0].clone();
+        let mut gained = session.bag.relic_list[0].clone();
         (gained.unique_id, gained.level, gained.equip_avatar_id) = (9_000_001, 0, 0);
         let mut sync = PlayerSyncScNotify::new();
         sync.relic_list.push(gained);
-        send(sync);
+        session.send(sync);
         let update = pages.try_recv().expect("the page gets the change, with no new login");
         assert!(update.contains(r#""event":"UpdateRelics""#) && update.contains("9000001"), "{update}");
-        assert_eq!(hub.summary().unwrap().relics, 559);
+        assert_eq!(session.hub.summary().unwrap().relics, 559);
 
         // One the account had, upgraded: changed in place, not added.
-        let mut upgraded = bag.relic_list[1].clone();
+        let mut upgraded = session.bag.relic_list[1].clone();
         upgraded.level = 15;
         let mut sync = PlayerSyncScNotify::new();
         sync.relic_list.push(upgraded.clone());
-        send(sync);
+        session.send(sync);
         let update = pages.try_recv().unwrap();
         assert!(update.contains(&upgraded.unique_id.to_string()) && update.contains(r#""level":15"#), "{update}");
-        assert_eq!(hub.summary().unwrap().relics, 559);
-        assert!(matches!(*hub.status().borrow(), Status::Synced { relics: 559, fresh: true, .. }));
+        assert!(matches!(*session.hub.status().borrow(), Status::Synced { relics: 559, fresh: true, .. }));
+    }
+
+    #[test]
+    fn relics_and_light_cones_swapped_between_characters_move_on_open_pages() {
+        let mut session = Session::logged_in();
+        let (_, mut pages) = session.hub.subscribe();
+        let before = session.account();
+
+        // Two characters trade the relics in one slot (a relic id's last digit): an equip swap in game sends both,
+        // each with its new wearer.
+        let worn: Vec<_> = session.bag.relic_list.iter().filter(|r| r.equip_avatar_id != 0).collect();
+        let (a, b) = worn
+            .iter()
+            .flat_map(|a| worn.iter().map(move |b| (*a, *b)))
+            .find(|(a, b)| a.tid % 10 == b.tid % 10 && a.equip_avatar_id != b.equip_avatar_id)
+            .map(|(a, b)| (a.clone(), b.clone()))
+            .expect("two characters wearing a relic in the same slot");
+        let mut sync = PlayerSyncScNotify::new();
+        for (relic, wearer) in [(&a, b.equip_avatar_id), (&b, a.equip_avatar_id)] {
+            let mut moved = relic.clone();
+            moved.equip_avatar_id = wearer;
+            sync.relic_list.push(moved);
+        }
+        session.send(sync);
+        let (a_id, b_id) = (a.unique_id.to_string(), b.unique_id.to_string());
+        let worn_before = wearers(&before["relics"]);
+        assert_ne!(worn_before[&a_id], worn_before[&b_id]);
+        let update: Value = serde_json::from_str(&pages.try_recv().expect("the swap reaches the page")).unwrap();
+        assert_eq!(update["event"], "UpdateRelics");
+        let moved = wearers(&update["data"]);
+        assert_eq!((&moved[&a_id], &moved[&b_id]), (&worn_before[&b_id], &worn_before[&a_id]));
+        // A page that opens now starts from the swap too, with the same relics.
+        let after = session.account();
+        let worn_after = wearers(&after["relics"]);
+        assert_eq!((&worn_after[&a_id], &worn_after[&b_id]), (&worn_before[&b_id], &worn_before[&a_id]));
+        assert_eq!(after["relics"].as_array().unwrap().len(), 558);
+
+        // Light cones the same way.
+        let cones: Vec<_> = session.bag.equipment_list.iter().filter(|c| c.equip_avatar_id != 0).collect();
+        let (c, d) = (cones[0].clone(), (*cones.iter().find(|x| x.equip_avatar_id != cones[0].equip_avatar_id).unwrap()).clone());
+        let mut sync = PlayerSyncScNotify::new();
+        for (cone, wearer) in [(&c, d.equip_avatar_id), (&d, c.equip_avatar_id)] {
+            let mut moved = cone.clone();
+            moved.equip_avatar_id = wearer;
+            sync.equipment_list.push(moved);
+        }
+        session.send(sync);
+        let (c_id, d_id) = (c.unique_id.to_string(), d.unique_id.to_string());
+        let held_before = wearers(&before["light_cones"]);
+        let update: Value = serde_json::from_str(&pages.try_recv().expect("the light cone swap reaches the page")).unwrap();
+        assert_eq!(update["event"], "UpdateLightCones");
+        let moved = wearers(&update["data"]);
+        assert_eq!((&moved[&c_id], &moved[&d_id]), (&held_before[&d_id], &held_before[&c_id]));
+        let held_after = wearers(&session.account()["light_cones"]);
+        assert_eq!((&held_after[&c_id], &held_after[&d_id]), (&held_before[&d_id], &held_before[&c_id]));
     }
 }
