@@ -23,7 +23,8 @@ mod win;
 use std::path::PathBuf;
 
 pub const APP_NAME: &str = "StarRailSim Sync";
-const DEFAULT_SITE: &str = "https://starrailsim.com/import";
+// `?sync=1` turns sync on as the page opens, so arriving from the app needs no click there.
+const DEFAULT_SITE: &str = "https://starrailsim.com/import?sync=1";
 const PORT: u16 = 23314;
 
 struct Options {
@@ -201,7 +202,17 @@ fn main() {
     let show = win::Signal::create(win::Signal::SHOW).expect("creating the show signal");
     tracing::info!(version = env!("CARGO_PKG_VERSION"), background = options.background, "started");
 
-    let hub = hub::Hub::new();
+    // Below normal, so the game never waits on it.
+    win::lower_priority();
+
+    // The account is kept on disk between runs; a test against the emulator keeps its own file, and a replay none.
+    let cache = match (&options.replay, options.emulator) {
+        (Some(_), _) => None,
+        (None, true) => Some(data_dir().join("last-import-emulator.json")),
+        (None, false) => Some(data_dir().join("last-import.json")),
+    };
+    let hub = hub::Hub::new(cache);
+    hub.restore();
     {
         let hub = hub.clone();
         let origins = options.allow_origins.clone();

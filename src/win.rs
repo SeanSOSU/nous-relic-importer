@@ -215,6 +215,11 @@ pub fn remove_uninstall_entry() {
     unsafe { RegDeleteTreeW(HKEY_CURRENT_USER, path.as_ptr()) };
 }
 
+pub fn lower_priority() {
+    use windows_sys::Win32::System::Threading::{BELOW_NORMAL_PRIORITY_CLASS, SetPriorityClass};
+    unsafe { SetPriorityClass(GetCurrentProcess(), BELOW_NORMAL_PRIORITY_CLASS) };
+}
+
 pub fn message(text: &str) {
     let (text, title) = (wide(text), wide(crate::APP_NAME));
     unsafe { MessageBoxW(std::ptr::null_mut(), text.as_ptr(), title.as_ptr(), MB_OK | MB_ICONINFORMATION) };

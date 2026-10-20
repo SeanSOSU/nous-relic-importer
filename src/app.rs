@@ -91,10 +91,15 @@ fn describe(status: &Status, clients: usize) -> (String, String, Tone) {
             "The game was already running when sync started, so it missed the login. Log out to the start screen and back in. If the game just updated, this app may need an update too.",
             Tone::Warn,
         ),
-        Status::Synced { relics, .. } => (
+        Status::Synced { relics, fresh: false, .. } => (
+            format!("Synced {} relics", thousands(*relics)),
+            "Saved from your last session. Start the game and log in to bring it up to date.",
+            Tone::Ok,
+        ),
+        Status::Synced { relics, fresh: true, .. } => (
             format!("Synced {} relics", thousands(*relics)),
             if clients == 0 {
-                "Open StarRailSim and turn on sync on its Import page to load them."
+                "Open StarRailSim to load them."
             } else {
                 "StarRailSim is up to date. Changes you make in game show up there as they happen."
             },
@@ -180,7 +185,7 @@ fn open_window(
 ) -> Option<(Window, WebView)> {
     let window = WindowBuilder::new()
         .with_title(APP_NAME)
-        .with_inner_size(LogicalSize::new(460.0, 420.0))
+        .with_inner_size(LogicalSize::new(460.0, 590.0))
         .with_resizable(false)
         .with_maximizable(false)
         .with_theme(Some(Theme::Dark))
@@ -252,21 +257,27 @@ pub fn run(hub: Hub, launch: Launch, quit: Signal, show_signal: Signal) -> ! {
     let mut window: Option<(Window, WebView)> = None;
     let mut context = WebContext::new(Some(crate::data_dir().join("webview")));
 
+    let files = hub.clone();
     let state = move |startup: bool| {
         let status = hub.status().borrow().clone();
         let clients = *hub.clients().borrow();
         let (headline, detail, tone) = describe(&status, clients);
-        let (uid, updated_at) = match status {
-            Status::Synced { uid, at, .. } => (uid, Some(at)),
-            _ => (None, None),
+        let (uid, updated_at, fresh) = match status {
+            Status::Synced { uid, at, fresh, .. } => (uid, Some(at), fresh),
+            _ => (None, None, false),
         };
         let json = json!({
             "version": env!("CARGO_PKG_VERSION"),
             "headline": headline,
             "detail": detail,
             "tone": tone.name(),
+            // Pulsing: an account from this session, feeding a page that is open right now.
+            "live": fresh && clients > 0,
+            "fresh": fresh,
             "uid": uid,
             "updatedAt": updated_at,
+            "summary": hub.summary(),
+            "savedFile": hub.cache_file().map(|p| p.display().to_string()),
             "startup": startup,
             "installed": installed,
         });
@@ -310,6 +321,12 @@ pub fn run(hub: Hub, launch: Launch, quit: Signal, show_signal: Signal) -> ! {
                 "ready" => refresh = true,
                 "open-site" => {
                     open::that_detached(&launch.site).ok();
+                }
+                "show-file" => {
+                    if let Some(path) = files.cache_file() {
+                        use std::os::windows::process::CommandExt;
+                        std::process::Command::new("explorer.exe").raw_arg(format!("/select,\"{}\"", path.display())).spawn().ok();
+                    }
                 }
                 "startup-on" | "startup-off" => {
                     set_startup(message == "startup-on", &launch.task_args);
@@ -379,9 +396,11 @@ mod tests {
 
     #[test]
     fn a_synced_account_points_at_the_site_until_a_page_is_open() {
-        let synced = Status::Synced { relics: 1412, uid: Some(600000001), at: 0 };
+        let synced = Status::Synced { relics: 1412, uid: Some(600000001), at: 0, fresh: true };
         assert_eq!(describe(&synced, 0).0, "Synced 1,412 relics");
-        assert!(describe(&synced, 0).1.contains("turn on sync"));
+        assert!(describe(&synced, 0).1.contains("Open StarRailSim"));
         assert!(describe(&synced, 2).1.contains("up to date"));
+        let saved = Status::Synced { relics: 1412, uid: None, at: 0, fresh: false };
+        assert!(describe(&saved, 2).1.contains("last session"), "a saved copy never claims to be current");
     }
 }
