@@ -13,6 +13,8 @@ mod emulator;
 mod hub;
 #[cfg(windows)]
 mod install;
+#[cfg(windows)]
+mod record;
 mod server;
 #[cfg(windows)]
 mod win;
@@ -42,6 +44,8 @@ struct Options {
     /// Test against the PearlSR emulator: relay its client's TCP connection instead of capturing the live
     /// game (no admin needed, nothing installed).
     emulator: bool,
+    /// With --emulator: also write the relayed session to this pcap file, for testing the capture-file decoder.
+    record: Option<PathBuf>,
 }
 
 impl Options {
@@ -56,6 +60,7 @@ impl Options {
             uninstall: false,
             headless: false,
             emulator: false,
+            record: None,
         };
         let mut args = std::env::args().skip(1);
         while let Some(arg) = args.next() {
@@ -66,6 +71,7 @@ impl Options {
                 "--uninstall" => options.uninstall = true,
                 "--headless" => options.headless = true,
                 "--emulator" => options.emulator = true,
+                "--record" => options.record = args.next().map(PathBuf::from),
                 "--site" => options.site = args.next().unwrap_or(options.site),
                 "--allow-origin" => options.allow_origins.extend(args.next()),
                 "--replay" => options.replay = args.next().map(PathBuf::from),
@@ -215,6 +221,13 @@ fn main() {
         let origins = options.allow_origins.clone();
         let replay = options.replay.clone();
         let emulator = options.emulator;
+        let recorder = options.record.as_deref().and_then(|path| match record::Recorder::create(path) {
+            Ok(r) => Some(std::sync::Arc::new(r)),
+            Err(e) => {
+                tracing::warn!(%e, path = %path.display(), "cannot record");
+                None
+            }
+        });
         std::thread::spawn(move || {
             let runtime = tokio::runtime::Builder::new_multi_thread()
                 .worker_threads(2)
@@ -229,7 +242,7 @@ fn main() {
                         _ => hub.set_status(hub::Status::Failed(format!("could not read {}", path.display()))),
                     },
                     None if emulator => {
-                        tokio::spawn(emulator::run(hub.clone()));
+                        tokio::spawn(emulator::run(hub.clone(), recorder));
                     }
                     None => {
                         tokio::spawn(capture::run(hub.clone()));

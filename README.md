@@ -74,6 +74,20 @@ Until then a new client's traffic cannot be decoded.
 `src/export` is vendored rather than used as a dependency because the archiver's build script links its own
 icon and version details into anything that depends on it.
 
+## The capture-file decoder
+
+`decoder/` is the same decoding for a browser: it reads a capture of the game logging in (pcap or pcapng, from
+PCAPdroid on Android, tcpdump, Wireshark or rvictl) and returns the account as the archiver's export. The site
+runs it in a Web Worker, so the capture never leaves the reader's device.
+
+```
+cargo build -p sync-decoder --target wasm32-wasip1 --release
+```
+
+then, in the site's repo, `node scripts/generate-sync-decoder.mjs <path to this repo>` copies the module in.
+`decoder/tests/emulator-login.pcap` is a PearlSR login recorded through `--emulator --record` (server side
+only) and is decoded by `cargo test -p sync-decoder`.
+
 ## Credits
 
 The packet decoding and the inventory export are [Reliquary](https://github.com/IceDynamix/reliquary) and

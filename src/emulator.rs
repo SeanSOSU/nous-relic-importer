@@ -7,6 +7,7 @@
 
 use std::collections::HashMap;
 use std::net::{Ipv4Addr, SocketAddr};
+use std::sync::Arc;
 
 use reliquary::network::command::GameCommand;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -18,17 +19,34 @@ use sync_core::frames::frames;
 
 use crate::accounts::Accounts;
 use crate::hub::{Hub, Status};
+use crate::record::Recorder;
 
 const GAME_PORT: u16 = 23301;
+
 /// A chunk the server sent on one relayed connection; `None` once that connection closes.
 type Tap = mpsc::UnboundedSender<(u32, Option<Vec<u8>>)>;
 
-async fn relay(client: TcpStream, server: TcpStream, id: u32, tap: Tap) {
+async fn relay(client: TcpStream, server: TcpStream, id: u32, tap: Tap, recorder: Option<Arc<Recorder>>) {
     client.set_nodelay(true).ok();
     server.set_nodelay(true).ok();
+    if let Some(r) = &recorder {
+        r.opened(id);
+    }
     let (mut from_client, mut to_client) = client.into_split();
     let (mut from_server, mut to_server) = server.into_split();
-    let upstream = tokio::io::copy(&mut from_client, &mut to_server);
+    let upstream = async {
+        let mut chunk = vec![0u8; 64 * 1024];
+        loop {
+            let n = from_client.read(&mut chunk).await?;
+            if n == 0 {
+                return Ok::<_, std::io::Error>(());
+            }
+            to_server.write_all(&chunk[..n]).await?;
+            if let Some(r) = &recorder {
+                r.data(id, false, &chunk[..n]);
+            }
+        }
+    };
     let downstream = async {
         let mut chunk = vec![0u8; 64 * 1024];
         loop {
@@ -37,6 +55,9 @@ async fn relay(client: TcpStream, server: TcpStream, id: u32, tap: Tap) {
                 return Ok::<_, std::io::Error>(());
             }
             to_client.write_all(&chunk[..n]).await?;
+            if let Some(r) = &recorder {
+                r.data(id, true, &chunk[..n]);
+            }
             tap.send((id, Some(chunk[..n].to_vec()))).ok();
         }
     };
@@ -45,10 +66,13 @@ async fn relay(client: TcpStream, server: TcpStream, id: u32, tap: Tap) {
         _ = upstream => {}
         _ = downstream => {}
     }
+    if let Some(r) = &recorder {
+        r.closed(id);
+    }
     tap.send((id, None)).ok();
 }
 
-pub async fn run(hub: Hub) {
+pub async fn run(hub: Hub, recorder: Option<Arc<Recorder>>) {
     let listener = TcpSocket::new_v4()
         .and_then(|socket| {
             socket.set_reuseaddr(true)?;
@@ -113,6 +137,6 @@ pub async fn run(hub: Hub) {
         if !hub.is_synced() {
             hub.set_status(Status::GameFound);
         }
-        tokio::spawn(relay(client, server, next_id, tap.clone()));
+        tokio::spawn(relay(client, server, next_id, tap.clone(), recorder.clone()));
     }
 }

@@ -2954,6 +2954,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "sync-decoder"
+version = "0.1.0"
+dependencies = [
+ "reliquary",
+ "serde_json",
+ "sync-core",
+]
+
+[[package]]
 name = "sync_wrapper"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

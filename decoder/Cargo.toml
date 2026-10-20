@@ -1,0 +1,15 @@
+[package]
+name = "sync-decoder"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Reads a capture file of Honkai: Star Rail logging in and returns the account, for the site to run in the browser"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# Keep this tag the same as the app's and core's.
+reliquary = { git = "https://github.com/IceDynamix/reliquary", tag = "v24.0.0", features = ["proto-rqa"] }
+serde_json = "1"
+sync-core = { path = "../core" }
