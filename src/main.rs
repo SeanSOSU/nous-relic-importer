@@ -312,7 +312,7 @@ fn may_capture(exe: &std::path::Path) -> bool {
         Grant::Granted => true,
         Grant::Refused => {
             linux::message(
-                "StarRailSim Sync needs your password once, to let it read the game's network traffic. Start it again and enter your password when asked.",
+                "StarRailSim Sync needs your password once, to let it read the game's network traffic. Start it again and enter your password when asked. A Steam Deck has no password until you set one: open Konsole and run passwd.",
             );
             false
         }
