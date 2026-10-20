@@ -1,0 +1,187 @@
+//! StarRailSim Sync: reads your Honkai: Star Rail account from the game's own network traffic and serves it
+//! to StarRailSim over a local socket, so the site's relic inventory follows the game without exports.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+#[cfg(windows)]
+mod capture;
+// Vendored from Reliquary Archiver as-is (see src/export/VENDORED); not every part of it is used here.
+#[allow(dead_code, unused_imports, unused_variables)]
+mod export;
+mod hub;
+#[cfg(windows)]
+mod install;
+mod server;
+#[cfg(windows)]
+mod tray;
+#[cfg(windows)]
+mod win;
+
+use std::path::PathBuf;
+
+pub const APP_NAME: &str = "StarRailSim Sync";
+const DEFAULT_SITE: &str = "https://starrailsim.com/import";
+const PORT: u16 = 23314;
+
+struct Options {
+    /// Started by the logon task.
+    background: bool,
+    /// Just installed: open the site once so the reader lands on the step that turns sync on.
+    first_run: bool,
+    site: String,
+    allow_origins: Vec<String>,
+    /// Serve a saved archiver export instead of capturing (no admin needed): for trying the site end to end.
+    replay: Option<PathBuf>,
+    /// Run from where it is, without installing or registering at sign-in.
+    portable: bool,
+    /// No notification-area icon: for automated checks.
+    no_tray: bool,
+}
+
+impl Options {
+    fn parse() -> Self {
+        let mut options = Options {
+            background: false,
+            first_run: false,
+            site: DEFAULT_SITE.to_owned(),
+            allow_origins: Vec::new(),
+            replay: None,
+            portable: false,
+            no_tray: false,
+        };
+        let mut args = std::env::args().skip(1);
+        while let Some(arg) = args.next() {
+            match arg.as_str() {
+                "--background" => options.background = true,
+                "--first-run" => options.first_run = true,
+                "--portable" => options.portable = true,
+                "--no-tray" => options.no_tray = true,
+                "--site" => options.site = args.next().unwrap_or(options.site),
+                "--allow-origin" => options.allow_origins.extend(args.next()),
+                "--replay" => options.replay = args.next().map(PathBuf::from),
+                other => tracing::warn!(other, "unknown argument"),
+            }
+        }
+        options
+    }
+
+    /// What the installed copy is started with, so a custom site and origins survive the install.
+    fn carried_args(&self) -> String {
+        let mut args = Vec::new();
+        if self.site != DEFAULT_SITE {
+            args.push(format!("--site \"{}\"", self.site));
+        }
+        for origin in &self.allow_origins {
+            args.push(format!("--allow-origin \"{origin}\""));
+        }
+        args.join(" ")
+    }
+}
+
+fn log_dir() -> PathBuf {
+    let base = std::env::var_os("LOCALAPPDATA").map(PathBuf::from).unwrap_or_else(std::env::temp_dir);
+    base.join(APP_NAME)
+}
+
+fn init_logging() {
+    let dir = log_dir();
+    std::fs::create_dir_all(&dir).ok();
+    let Ok(file) = std::fs::File::create(dir.join("sync.log")) else { return };
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
+        .with_ansi(false)
+        .with_writer(std::sync::Mutex::new(file))
+        .init();
+    std::panic::set_hook(Box::new(|info| tracing::error!(%info, "panic")));
+}
+
+#[cfg(windows)]
+fn main() {
+    init_logging();
+    let options = Options::parse();
+    let open_site = || {
+        open::that_detached(&options.site).ok();
+    };
+
+    if options.replay.is_none() {
+        // pktmon only runs elevated.
+        if !win::is_elevated() {
+            if !win::relaunch_elevated() {
+                win::message("StarRailSim Sync needs administrator access to read the game's network traffic. Run it again and choose Yes.");
+            }
+            return;
+        }
+        if !options.portable && !install::running_installed() {
+            if win::SingleInstance::other_running() {
+                return open_site();
+            }
+            let carried = options.carried_args();
+            match install::install(&format!("--background {carried}")) {
+                Ok(exe) => {
+                    use std::os::windows::process::CommandExt;
+                    let mut installed = std::process::Command::new(exe);
+                    installed.arg("--first-run");
+                    if !carried.is_empty() {
+                        installed.raw_arg(&carried);
+                    }
+                    if installed.spawn().is_ok() {
+                        return;
+                    }
+                    tracing::warn!("could not start the installed copy; running from here");
+                }
+                Err(e) => tracing::warn!(%e, "install failed; running from here"),
+            }
+        }
+    }
+
+    let Some(_instance) = win::SingleInstance::acquire() else {
+        return open_site();
+    };
+    tracing::info!(version = env!("CARGO_PKG_VERSION"), background = options.background, "started");
+
+    let hub = hub::Hub::new();
+    {
+        let hub = hub.clone();
+        let origins = options.allow_origins.clone();
+        let replay = options.replay.clone();
+        std::thread::spawn(move || {
+            let runtime = tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(2)
+                .enable_all()
+                .build()
+                .expect("tokio runtime");
+            runtime.block_on(async move {
+                let server = tokio::spawn(server::serve(hub.clone(), PORT, origins));
+                match replay {
+                    Some(path) => match std::fs::read_to_string(&path).map(|s| serde_json::from_str(&s)) {
+                        Ok(Ok(export)) => hub.publish_saved(export),
+                        _ => hub.set_status(hub::Status::Failed(format!("could not read {}", path.display()))),
+                    },
+                    None => {
+                        tokio::spawn(capture::run(hub.clone()));
+                    }
+                }
+                if let Ok(Err(e)) = server.await {
+                    tracing::error!(%e, "socket server stopped");
+                    hub.set_status(hub::Status::Failed(format!("port {PORT} is in use")));
+                }
+                std::future::pending::<()>().await;
+            });
+        });
+    }
+
+    if options.first_run {
+        open_site();
+    }
+    if options.no_tray {
+        loop {
+            std::thread::park();
+        }
+    }
+    tray::run(hub, &options.site, &format!("--background {}", options.carried_args()));
+}
+
+#[cfg(not(windows))]
+fn main() {
+    let _ = (init_logging, Options::parse, log_dir);
+    eprintln!("{APP_NAME} runs on Windows only.");
+}

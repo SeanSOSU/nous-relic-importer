@@ -1,0 +1,53 @@
+[package]
+name = "starrailsim-sync"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Keeps StarRailSim's relic inventory in step with your game account, read from the game's own network traffic"
+
+[dependencies]
+# The packet decoder. Its protobuf types change with every game version: on each patch, re-vendor the exporter
+# with tools/update-exporter.ps1 and set this tag (and the build-dependency's) to the one it prints.
+reliquary = { git = "https://github.com/IceDynamix/reliquary", tag = "v24.0.0", features = ["proto-rqa"] }
+
+axum = { version = "0.8", features = ["ws"] }
+futures = "0.3"
+open = "5"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_with = "3"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net", "fs"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[target.'cfg(windows)'.dependencies]
+pktmon = { version = "0.6.2", features = ["tokio"] }
+tray-icon = "0.26"
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_System_Threading",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[build-dependencies]
+reliquary = { git = "https://github.com/IceDynamix/reliquary", tag = "v24.0.0", features = ["proto-rqa"] }
+ureq = { version = "2.12.1", features = ["json"] }
+
+[target.'cfg(windows)'.build-dependencies]
+winres = "0.1.12"
+
+[features]
+default = ["stream"]
+# Live update events from the vendored exporter (src/export), which gates them on this feature.
+stream = []
+
+[profile.dev]
+# The game's KCP header uses a field the kcp crate adds to; see reliquary-archiver's Cargo.toml.
+overflow-checks = false
+
+[profile.release]
+opt-level = "s"
+lto = true
+overflow-checks = false

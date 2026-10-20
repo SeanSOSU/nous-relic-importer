@@ -1,0 +1,123 @@
+//! First run copies the app into the user's programs folder and registers a logon task that starts it with
+//! administrator rights. A task rather than the Run key because the Run key cannot start an elevated program
+//! without a UAC prompt at every sign-in; the task asks once, when it is created.
+
+use std::io;
+use std::os::windows::process::CommandExt;
+use std::path::PathBuf;
+use std::process::Command;
+
+use crate::APP_NAME;
+
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+pub fn install_dir() -> PathBuf {
+    let base = std::env::var_os("LOCALAPPDATA").map(PathBuf::from).unwrap_or_else(std::env::temp_dir);
+    base.join("Programs").join(APP_NAME)
+}
+
+pub fn installed_exe() -> PathBuf {
+    install_dir().join("starrailsim-sync.exe")
+}
+
+pub fn running_installed() -> bool {
+    let canonical = |p: PathBuf| std::fs::canonicalize(&p).unwrap_or(p);
+    std::env::current_exe().map(canonical).ok() == Some(canonical(installed_exe()))
+}
+
+/// Copies this executable into place and registers it to start at sign-in. Returns the installed path.
+pub fn install(task_args: &str) -> io::Result<PathBuf> {
+    let target = installed_exe();
+    std::fs::create_dir_all(install_dir())?;
+    std::fs::copy(std::env::current_exe()?, &target)?;
+    register_startup(task_args)?;
+    Ok(target)
+}
+
+fn schtasks(args: &[&str]) -> io::Result<bool> {
+    let status = Command::new("schtasks.exe").args(args).creation_flags(CREATE_NO_WINDOW).status()?;
+    Ok(status.success())
+}
+
+pub fn startup_registered() -> bool {
+    schtasks(&["/Query", "/TN", APP_NAME]).unwrap_or(false)
+}
+
+pub fn register_startup(task_args: &str) -> io::Result<()> {
+    let user = match (std::env::var("USERDOMAIN"), std::env::var("USERNAME")) {
+        (Ok(domain), Ok(name)) => format!("{domain}\\{name}"),
+        (_, Ok(name)) => name,
+        _ => return Err(io::Error::other("no signed-in user")),
+    };
+    let exe = installed_exe();
+    let xml = task_xml(&user, &exe.to_string_lossy(), task_args);
+    // schtasks reads task XML as UTF-16.
+    let mut bytes = vec![0xFF, 0xFE];
+    bytes.extend(xml.encode_utf16().flat_map(u16::to_le_bytes));
+    let file = std::env::temp_dir().join("starrailsim-sync-task.xml");
+    std::fs::write(&file, bytes)?;
+    let created = schtasks(&["/Create", "/TN", APP_NAME, "/XML", &file.to_string_lossy(), "/F"]);
+    std::fs::remove_file(&file).ok();
+    if created? { Ok(()) } else { Err(io::Error::other("schtasks refused the task")) }
+}
+
+pub fn unregister_startup() -> io::Result<()> {
+    if schtasks(&["/Delete", "/TN", APP_NAME, "/F"])? { Ok(()) } else { Err(io::Error::other("schtasks could not delete the task")) }
+}
+
+/// Removes the logon task and, once this process has exited, the installed folder.
+pub fn uninstall() -> io::Result<()> {
+    if startup_registered() {
+        unregister_startup()?;
+    }
+    let dir = install_dir();
+    Command::new("cmd.exe")
+        .raw_arg(format!("/C ping -n 3 127.0.0.1 >NUL & rmdir /S /Q \"{}\"", dir.display()))
+        .creation_flags(CREATE_NO_WINDOW)
+        .spawn()?;
+    Ok(())
+}
+
+fn escape(s: &str) -> String {
+    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
+}
+
+// No time limit and no battery rules: the defaults stop a task after 72 hours, and on battery.
+fn task_xml(user: &str, exe: &str, args: &str) -> String {
+    let (user, exe, args) = (escape(user), escape(exe), escape(args));
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>Keeps StarRailSim's relic inventory in step with your game account.</Description>
+  </RegistrationInfo>
+  <Triggers>
+    <LogonTrigger>
+      <Enabled>true</Enabled>
+      <UserId>{user}</UserId>
+    </LogonTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <UserId>{user}</UserId>
+      <LogonType>InteractiveToken</LogonType>
+      <RunLevel>HighestAvailable</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <Priority>7</Priority>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>{exe}</Command>
+      <Arguments>{args}</Arguments>
+    </Exec>
+  </Actions>
+</Task>
+"#
+    )
+}
