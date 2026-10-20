@@ -1,11 +1,12 @@
-//! First run copies the app into the user's programs folder and registers a logon task that starts it with
-//! administrator rights. A task rather than the Run key because the Run key cannot start an elevated program
-//! without a UAC prompt at every sign-in; the task asks once, when it is created.
+//! First run copies the app into the user's programs folder, adds a Start menu shortcut, and registers a
+//! logon task that starts it with administrator rights. A task rather than the Run key because the Run key
+//! cannot start an elevated program without a UAC prompt at every sign-in; the task asks once, when it is
+//! created, and the shortcut starts the app through it too.
 
 use std::io;
 use std::os::windows::process::CommandExt;
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 use crate::APP_NAME;
 
@@ -34,17 +35,53 @@ pub fn installed_is_current() -> bool {
     }
 }
 
-/// Copies this executable into place and registers it to start at sign-in. Returns the installed path.
+fn shortcut() -> PathBuf {
+    let base = std::env::var_os("APPDATA").map(PathBuf::from).unwrap_or_else(std::env::temp_dir);
+    base.join(r"Microsoft\Windows\Start Menu\Programs").join(format!("{APP_NAME}.lnk"))
+}
+
+/// Copies this executable into place, adds the Start menu shortcut and registers it to start at sign-in.
+/// Returns the installed path.
 pub fn install(task_args: &str) -> io::Result<PathBuf> {
     let target = installed_exe();
     std::fs::create_dir_all(install_dir())?;
     std::fs::copy(std::env::current_exe()?, &target)?;
+    if let Err(e) = add_shortcut(&target) {
+        tracing::warn!(%e, "no Start menu shortcut");
+    }
+    if !crate::win::add_uninstall_entry(&target, &install_dir()) {
+        tracing::warn!("no Installed apps entry");
+    }
     register_startup(task_args)?;
     Ok(target)
 }
 
+fn add_shortcut(target: &std::path::Path) -> io::Result<()> {
+    // Single-quoted PowerShell strings escape a quote by doubling it.
+    let quote = |p: &std::path::Path| p.to_string_lossy().replace('\'', "''");
+    let script = format!(
+        "$s = (New-Object -ComObject WScript.Shell).CreateShortcut('{}'); $s.TargetPath = '{}'; $s.WorkingDirectory = '{}'; \
+         $s.Description = 'Keeps StarRailSim in step with your game account'; $s.Save()",
+        quote(&shortcut()),
+        quote(target),
+        quote(&install_dir()),
+    );
+    let status = Command::new("powershell.exe")
+        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .creation_flags(CREATE_NO_WINDOW)
+        .status()?;
+    if status.success() { Ok(()) } else { Err(io::Error::other("powershell could not write the shortcut")) }
+}
+
 fn schtasks(args: &[&str]) -> io::Result<bool> {
-    let status = Command::new("schtasks.exe").args(args).creation_flags(CREATE_NO_WINDOW).status()?;
+    let status = Command::new("schtasks.exe")
+        .args(args)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .creation_flags(CREATE_NO_WINDOW)
+        .status()?;
     Ok(status.success())
 }
 
@@ -70,15 +107,23 @@ pub fn register_startup(task_args: &str) -> io::Result<()> {
     if created? { Ok(()) } else { Err(io::Error::other("schtasks refused the task")) }
 }
 
+/// Starts the installed copy through its sign-in task, which already has administrator rights, so a launch
+/// from the Start menu needs no UAC prompt. False if there is no task to run.
+pub fn start_through_task() -> bool {
+    schtasks(&["/Run", "/TN", APP_NAME]).unwrap_or(false)
+}
+
 pub fn unregister_startup() -> io::Result<()> {
     if schtasks(&["/Delete", "/TN", APP_NAME, "/F"])? { Ok(()) } else { Err(io::Error::other("schtasks could not delete the task")) }
 }
 
-/// Removes the logon task and, once this process has exited, the installed folder and the logs.
+/// Removes the logon task and the shortcut and, once this process has exited, the installed folder and the logs.
 pub fn uninstall() -> io::Result<()> {
     if startup_registered() {
         unregister_startup()?;
     }
+    std::fs::remove_file(shortcut()).ok();
+    crate::win::remove_uninstall_entry();
     let (program, logs) = (install_dir(), crate::data_dir());
     Command::new("cmd.exe")
         .raw_arg(format!(

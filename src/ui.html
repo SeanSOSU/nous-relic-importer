@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>StarRailSim Sync</title>
+<style>
+  :root {
+    --page: #0a0f1c;
+    --ink: #e8eefc;
+    --ink-2: #a6b3cc;
+    --muted: #6f7d99;
+    --line: rgba(232, 238, 252, 0.12);
+    --ok: #199e70;
+    --warn: #d9a441;
+    --idle: #8a8f98;
+    --btn: linear-gradient(100deg, #199e70, #0f8a8a);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--page);
+    color: var(--ink);
+    font: 14px/1.5 system-ui, "Segoe UI", sans-serif;
+    user-select: none;
+    display: flex;
+    flex-direction: column;
+    padding: 24px 28px 18px;
+  }
+  .state { margin-top: 12px; display: flex; align-items: center; gap: 12px; }
+  .dot { flex: none; width: 12px; height: 12px; border-radius: 50%; background: var(--idle); }
+  .dot[data-tone="ok"] { background: var(--ok); box-shadow: 0 0 0 5px rgba(25, 158, 112, 0.18); }
+  .dot[data-tone="warn"] { background: var(--warn); box-shadow: 0 0 0 5px rgba(217, 164, 65, 0.18); }
+  .dot[data-tone="idle"] { animation: breathe 2.4s ease-in-out infinite; }
+  @keyframes breathe { 50% { opacity: 0.35; } }
+  .state h2 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+  .account { margin: 4px 0 0 24px; color: var(--muted); font-size: 13px; min-height: 20px; }
+  .detail { margin: 18px 0 0; color: var(--ink-2); }
+
+  .primary {
+    margin-top: 24px;
+    align-self: flex-start;
+    font: inherit;
+    font-weight: 600;
+    color: #fff;
+    background: var(--btn);
+    border: none;
+    border-radius: 8px;
+    padding: 9px 18px;
+    cursor: pointer;
+  }
+  .primary:hover { filter: brightness(1.08); }
+
+  .settings { margin-top: 32px; padding-top: 18px; border-top: 1px solid var(--line); }
+  label.toggle { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+  label.toggle input { width: 16px; height: 16px; accent-color: var(--ok); margin: 0; }
+  label.toggle[aria-disabled="true"] { cursor: default; color: var(--muted); }
+  .hint { margin: 4px 0 0 26px; color: var(--muted); font-size: 12px; }
+
+  footer { margin-top: auto; display: flex; align-items: center; gap: 16px; color: var(--muted); font-size: 12px; }
+  footer p { margin: 0; flex: 1; }
+  footer button { font: inherit; color: var(--ink-2); background: none; border: none; padding: 0; cursor: pointer; }
+  footer button:hover { color: var(--ink); text-decoration: underline; }
+  footer button[hidden] { display: none; }
+</style>
+</head>
+<body>
+  <div class="state" role="status">
+    <span class="dot" id="dot"></span>
+    <h2 id="headline">Starting…</h2>
+  </div>
+  <p class="account" id="account"></p>
+  <p class="detail" id="detail"></p>
+
+  <button class="primary" type="button" id="open">Open StarRailSim</button>
+
+  <section class="settings">
+    <label class="toggle" id="startup-label">
+      <input type="checkbox" id="startup">
+      Start with Windows
+    </label>
+    <p class="hint" id="startup-hint"></p>
+  </section>
+
+  <footer>
+    <p>Closing this window keeps sync running in the notification area. <span id="version"></span></p>
+    <button type="button" id="uninstall">Uninstall</button>
+    <button type="button" id="quit">Quit</button>
+  </footer>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const send = (message) => window.ipc.postMessage(message);
+
+  window.render = (s) => {
+    $("version").textContent = "v" + s.version;
+    $("dot").dataset.tone = s.tone;
+    $("headline").textContent = s.headline;
+    $("detail").textContent = s.detail;
+    const updated = s.updatedAt ? new Date(s.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : null;
+    $("account").textContent = [s.uid ? "UID " + s.uid : null, updated ? "updated " + updated : null].filter(Boolean).join(" · ");
+    $("startup").checked = s.startup;
+    $("startup").disabled = !s.installed;
+    $("startup-label").setAttribute("aria-disabled", String(!s.installed));
+    $("startup-hint").textContent = s.installed
+      ? "Starts quietly when you sign in, so it is already running before you open the game."
+      : "Available once installed: run the downloaded file without --portable.";
+    $("uninstall").hidden = !s.installed;
+  };
+
+  $("open").addEventListener("click", () => send("open-site"));
+  $("startup").addEventListener("change", (e) => send(e.target.checked ? "startup-on" : "startup-off"));
+  $("quit").addEventListener("click", () => send("quit"));
+  $("uninstall").addEventListener("click", () => {
+    if (confirm("Uninstall StarRailSim Sync? It stops syncing and removes itself from this PC.")) send("uninstall");
+  });
+  document.addEventListener("contextmenu", (e) => e.preventDefault());
+  send("ready");
+</script>
+</body>
+</html>

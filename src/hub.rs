@@ -2,6 +2,7 @@
 //! snapshot a newly connected page starts from, and the live frames every connected page receives.
 
 use std::sync::{Arc, Mutex};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::export::Exporter;
 use crate::export::fribbels::{OptimizerEvent, OptimizerExporter};
@@ -13,10 +14,17 @@ pub enum Status {
     Starting,
     Failed(String),
     WaitingForGame,
+    /// The game opened its connection; the login that carries the account has not arrived yet.
+    GameFound,
     LoggingIn,
     /// Packets arrived that need a session key this app never saw: the game was already logged in.
     NeedsRelogin,
-    Synced { relics: usize, uid: Option<u32> },
+    /// `at` is when the account last changed, in milliseconds since the Unix epoch.
+    Synced { relics: usize, uid: Option<u32>, at: u64 },
+}
+
+fn now_ms() -> u64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64)
 }
 
 /// One message as a page receives it: `{"event": ..., "data": ...}`, serialized once for every client.
@@ -88,7 +96,7 @@ impl Hub {
         *held = Some(snapshot);
         self.inner.frames.send(frame).ok();
         drop(held);
-        self.set_status(Status::Synced { relics, uid });
+        self.set_status(Status::Synced { relics, uid, at: now_ms() });
     }
 
     /// Serves a saved export as if it had just been captured (`--replay`).
@@ -98,7 +106,7 @@ impl Hub {
         let frame = Frame::from(serde_json::json!({ "event": "InitialScan", "data": export }).to_string());
         *self.inner.snapshot.lock().unwrap() = Some(frame.clone());
         self.inner.frames.send(frame).ok();
-        self.set_status(Status::Synced { relics, uid });
+        self.set_status(Status::Synced { relics, uid, at: now_ms() });
     }
 
     pub fn subscribe(&self) -> (Option<Frame>, broadcast::Receiver<Frame>) {
@@ -130,7 +138,7 @@ mod tests {
         assert!(before.is_none());
 
         hub.publish_saved(serde_json::json!({ "metadata": { "uid": 600000001 }, "relics": [{ "_uid": "1" }, { "_uid": "2" }] }));
-        assert_eq!(*hub.status().borrow(), Status::Synced { relics: 2, uid: Some(600000001) });
+        assert!(matches!(*hub.status().borrow(), Status::Synced { relics: 2, uid: Some(600000001), .. }));
         assert!(early.try_recv().unwrap().contains(r#""event":"InitialScan""#));
 
         let (snapshot, mut late) = hub.subscribe();

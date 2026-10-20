@@ -10,7 +10,7 @@ use pktmon::filter::{PktMonFilter, TransportProtocol};
 use pktmon::{Capture, PacketPayload};
 use reliquary::network::command::GameCommandError;
 use reliquary::network::command::command_id::PlayerGetTokenScRsp;
-use reliquary::network::{GamePacket, GameSniffer, NetworkError};
+use reliquary::network::{ConnectionPacket, GamePacket, GameSniffer, NetworkError};
 use crate::export::Exporter;
 use crate::export::fribbels::{OptimizerEvent, OptimizerExporter};
 use tokio::sync::broadcast;
@@ -88,7 +88,24 @@ pub async fn run(hub: Hub) {
                 Err(_) => continue,
             };
             for packet in packets {
-                let GamePacket::Commands { conv_id, result } = packet else { continue };
+                let (conv_id, result) = match packet {
+                    GamePacket::Connection(ConnectionPacket::HandshakeEstablished { conv_id }) => {
+                        info!(conv_id, "game connected");
+                        if !hub.is_synced() {
+                            hub.set_status(Status::GameFound);
+                        }
+                        continue;
+                    }
+                    GamePacket::Connection(ConnectionPacket::Disconnected) => {
+                        info!("game disconnected");
+                        if !hub.is_synced() {
+                            hub.set_status(Status::WaitingForGame);
+                        }
+                        continue;
+                    }
+                    GamePacket::Connection(_) => continue,
+                    GamePacket::Commands { conv_id, result } => (conv_id, result),
+                };
                 let command = match result {
                     Ok(command) => command,
                     Err(GameCommandError::DecryptionKeyMissing) => {

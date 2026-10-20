@@ -22,10 +22,14 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [target.'cfg(windows)'.dependencies]
 pktmon = { version = "0.6.2", features = ["tokio"] }
+tao = "0.37"
 tray-icon = "0.26"
+wry = "0.57"
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_System_Registry",
     "Win32_System_Threading",
     "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",

@@ -3,6 +3,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 #[cfg(windows)]
+mod app;
+#[cfg(windows)]
 mod capture;
 // Vendored from Reliquary Archiver as-is (see src/export/VENDORED); not every part of it is used here.
 #[allow(dead_code, unused_imports, unused_variables)]
@@ -11,8 +13,6 @@ mod hub;
 #[cfg(windows)]
 mod install;
 mod server;
-#[cfg(windows)]
-mod tray;
 #[cfg(windows)]
 mod win;
 
@@ -33,8 +33,10 @@ struct Options {
     replay: Option<PathBuf>,
     /// Run from where it is, without installing or registering at sign-in.
     portable: bool,
-    /// No notification-area icon: for automated checks.
-    no_tray: bool,
+    /// Remove the installed copy, its sign-in task, shortcut and logs (what Settings > Installed apps runs).
+    uninstall: bool,
+    /// No tray icon and no window: for automated checks.
+    headless: bool,
 }
 
 impl Options {
@@ -46,7 +48,8 @@ impl Options {
             allow_origins: Vec::new(),
             replay: None,
             portable: false,
-            no_tray: false,
+            uninstall: false,
+            headless: false,
         };
         let mut args = std::env::args().skip(1);
         while let Some(arg) = args.next() {
@@ -54,7 +57,8 @@ impl Options {
                 "--background" => options.background = true,
                 "--first-run" => options.first_run = true,
                 "--portable" => options.portable = true,
-                "--no-tray" => options.no_tray = true,
+                "--uninstall" => options.uninstall = true,
+                "--headless" => options.headless = true,
                 "--site" => options.site = args.next().unwrap_or(options.site),
                 "--allow-origin" => options.allow_origins.extend(args.next()),
                 "--replay" => options.replay = args.next().map(PathBuf::from),
@@ -86,7 +90,12 @@ pub fn data_dir() -> PathBuf {
 fn init_logging() {
     let dir = data_dir();
     std::fs::create_dir_all(&dir).ok();
-    let Ok(file) = std::fs::File::create(dir.join("sync.log")) else { return };
+    let path = dir.join("sync.log");
+    // Appended, never truncated: a second launch that only hands over to the running copy must not wipe its log.
+    if std::fs::metadata(&path).is_ok_and(|m| m.len() > 1 << 20) {
+        std::fs::rename(&path, dir.join("sync.old.log")).ok();
+    }
+    let Ok(file) = std::fs::OpenOptions::new().create(true).append(true).open(&path) else { return };
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
         .with_ansi(false)
@@ -103,13 +112,44 @@ fn main() {
         open::that_detached(&options.site).ok();
     };
 
+    if options.uninstall {
+        if !win::is_elevated() {
+            if !win::relaunch_elevated() {
+                win::message("Uninstalling StarRailSim Sync needs administrator access, to remove its sign-in task.");
+            }
+            return;
+        }
+        if win::SingleInstance::other_running() && !win::Signal::quit_and_wait(std::time::Duration::from_secs(10)) {
+            win::message("Quit StarRailSim Sync from its tray icon, then uninstall it again.");
+            return;
+        }
+        if let Err(e) = install::uninstall() {
+            tracing::warn!(%e, "uninstall did not finish");
+            win::message(&format!("Uninstalling did not finish: {e}"));
+        }
+        return;
+    }
+
     if options.replay.is_none() {
-        // This same build is already running: running it again only opens the site, without a UAC prompt.
+        // This same build is already running: running it again brings its window up, without a UAC prompt.
         if win::SingleInstance::other_running() && (install::running_installed() || install::installed_is_current()) {
-            return open_site();
+            if !win::Signal::send(win::Signal::SHOW) {
+                open_site();
+            }
+            return;
         }
         // pktmon only runs elevated.
         if !win::is_elevated() {
+            // Installed and registered: start through the sign-in task, which has admin rights, then show the window.
+            if install::running_installed() && install::start_through_task() {
+                for _ in 0..50 {
+                    if win::Signal::send(win::Signal::SHOW) {
+                        return;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(200));
+                }
+                return;
+            }
             if !win::relaunch_elevated() {
                 win::message("StarRailSim Sync needs administrator access to read the game's network traffic. Run it again and choose Yes.");
             }
@@ -118,7 +158,7 @@ fn main() {
         if !options.portable && !install::running_installed() {
             if win::SingleInstance::other_running() {
                 // A different build: an update. The running copy steps aside so this one can replace it.
-                if !win::QuitSignal::send_and_wait(std::time::Duration::from_secs(10)) {
+                if !win::Signal::quit_and_wait(std::time::Duration::from_secs(10)) {
                     win::message("Quit StarRailSim Sync from its tray icon, then run this again to update it.");
                     return;
                 }
@@ -143,9 +183,13 @@ fn main() {
     }
 
     let Some(_instance) = win::SingleInstance::acquire() else {
-        return open_site();
+        if !win::Signal::send(win::Signal::SHOW) {
+            open_site();
+        }
+        return;
     };
-    let quit = win::QuitSignal::create().expect("creating the quit signal");
+    let quit = win::Signal::create(win::Signal::QUIT).expect("creating the quit signal");
+    let show = win::Signal::create(win::Signal::SHOW).expect("creating the show signal");
     tracing::info!(version = env!("CARGO_PKG_VERSION"), background = options.background, "started");
 
     let hub = hub::Hub::new();
@@ -182,11 +226,15 @@ fn main() {
     if options.first_run {
         open_site();
     }
-    if options.no_tray {
-        unsafe { windows_sys::Win32::System::Threading::WaitForSingleObject(quit.handle(), u32::MAX) };
-        return;
+    if options.headless {
+        return quit.wait();
     }
-    tray::run(hub, &options.site, &format!("--background {}", options.carried_args()), &quit);
+    let launch = app::Launch {
+        site: options.site.clone(),
+        task_args: format!("--background {}", options.carried_args()),
+        show_window: !options.background,
+    };
+    app::run(hub, launch, quit, show);
 }
 
 #[cfg(not(windows))]

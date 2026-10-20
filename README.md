@@ -11,18 +11,21 @@ StarRailSim's own pages may open that socket.
 
 1. Run `starrailsim-sync.exe` and accept the administrator prompt. Reading packets with Windows' built-in
    packet monitor (pktmon) needs it.
-2. It installs itself to `%LOCALAPPDATA%\Programs\StarRailSim Sync`, registers to start when you sign in (a
-   scheduled task with highest privileges, so there is no prompt at each sign-in), and opens StarRailSim's
-   Import page. Turn on sync there.
+2. It installs itself to `%LOCALAPPDATA%\Programs\StarRailSim Sync`, adds a Start menu shortcut and an entry
+   under Settings > Apps > Installed apps, registers to start when you sign in (a scheduled task with highest
+   privileges, so there is no prompt at each sign-in), then opens its window and StarRailSim's Import page.
+   Turn on sync there.
 3. Start the game and click to start. The game only hands out its session key at login, so if you were
    already in game, log out and back in.
 
-The tray icon says what it is doing: grey while it waits for the game, teal once your account is synced, amber
-when it needs you (log back in, or something stopped it). Left-click opens the site; right-click has
-**Start with Windows**, **Uninstall** and **Quit**.
+The window says what it is doing and what to do next; closing it keeps sync running in the notification area.
+The tray icon is grey while it waits for the game, teal once your account is synced, and amber when it needs
+you (log back in, or something stopped it). Left-click it, or use the Start menu shortcut, to bring the window
+back; neither asks for administrator access again.
 
 To update, download the new version and run it: it asks the running copy to quit and installs over it.
-Running the same version again just opens the site.
+Uninstall from Settings > Apps > Installed apps, or with **Uninstall** in the window: both remove the program,
+the sign-in task, the shortcut and the logs.
 
 Logs: `%LOCALAPPDATA%\StarRailSim Sync\sync.log`.
 
@@ -34,7 +37,9 @@ Logs: `%LOCALAPPDATA%\StarRailSim Sync\sync.log`.
 | `--allow-origin <origin>` | Also accept this page origin on the socket (repeatable) |
 | `--portable` | Run from where it is: no install, no sign-in task |
 | `--replay <export.json>` | Serve a saved Reliquary Archiver export instead of capturing; needs no admin |
-| `--no-tray` | No notification-area icon (for automated checks) |
+| `--headless` | No tray icon and no window (for automated checks) |
+| `--uninstall` | Remove the installed copy (what Installed apps runs) |
+| `--background` | Start without the window (what the sign-in task passes) |
 
 ## Building
 

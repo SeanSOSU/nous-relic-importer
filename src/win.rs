@@ -4,10 +4,14 @@ use std::ffi::OsStr;
 use std::os::windows::ffi::OsStrExt;
 use std::ptr::null;
 
-use windows_sys::Win32::Foundation::{CloseHandle, ERROR_ALREADY_EXISTS, GetLastError, HANDLE};
-use windows_sys::Win32::Security::{GetTokenInformation, TOKEN_ELEVATION, TOKEN_QUERY, TokenElevation};
+use windows_sys::Win32::Foundation::{CloseHandle, ERROR_ALREADY_EXISTS, GetLastError, HANDLE, LocalFree};
+use windows_sys::Win32::Security::Authorization::{ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1};
+use windows_sys::Win32::Security::{
+    GetTokenInformation, PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES, TOKEN_ELEVATION, TOKEN_QUERY, TokenElevation,
+};
 use windows_sys::Win32::System::Threading::{
-    CreateEventW, CreateMutexW, EVENT_MODIFY_STATE, GetCurrentProcess, OpenEventW, OpenProcessToken, SetEvent,
+    CreateEventW, CreateMutexW, EVENT_MODIFY_STATE, GetCurrentProcess, INFINITE, OpenEventW, OpenProcessToken, SetEvent,
+    WaitForSingleObject,
 };
 use windows_sys::Win32::UI::Shell::ShellExecuteW;
 use windows_sys::Win32::UI::WindowsAndMessaging::{MB_ICONINFORMATION, MB_OK, MessageBoxW, SW_SHOWNORMAL};
@@ -78,32 +82,62 @@ impl Drop for SingleInstance {
     }
 }
 
-/// Lets a newer copy ask the running one to step aside, so installing an update is just running it.
-pub struct QuitSignal(HANDLE);
+/// How another copy reaches the running one: QUIT lets a newer build step in (so updating is just running
+/// it), SHOW brings the window up when the app is started again.
+pub struct Signal(HANDLE);
 
-impl QuitSignal {
-    const NAME: &str = "Local\\StarRailSimSyncQuit";
+impl Signal {
+    pub const QUIT: &str = "Local\\StarRailSimSyncQuit";
+    pub const SHOW: &str = "Local\\StarRailSimSyncShow";
 
-    pub fn create() -> Option<Self> {
-        let name = wide(Self::NAME);
-        let handle = unsafe { CreateEventW(null(), 1, 0, name.as_ptr()) };
-        (!handle.is_null()).then_some(Self(handle))
+    // The app runs elevated, and Windows keeps a normal-rights process from signalling an elevated one's
+    // objects. This descriptor lets the signed-in user's own processes raise the signal (SYNCHRONIZE |
+    // EVENT_MODIFY_STATE) and labels it medium integrity, so a plain double-click can reach it.
+    const SDDL: &str = "D:(A;;GA;;;SY)(A;;GA;;;BA)(A;;0x100002;;;IU)S:(ML;;NW;;;ME)";
+
+    pub fn create(name: &str) -> Option<Self> {
+        let name = wide(name);
+        let sddl = wide(Self::SDDL);
+        unsafe {
+            let mut descriptor: PSECURITY_DESCRIPTOR = std::ptr::null_mut();
+            let described =
+                ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl.as_ptr(), SDDL_REVISION_1, &mut descriptor, std::ptr::null_mut()) != 0;
+            let attributes = SECURITY_ATTRIBUTES {
+                nLength: size_of::<SECURITY_ATTRIBUTES>() as u32,
+                lpSecurityDescriptor: descriptor,
+                bInheritHandle: 0,
+            };
+            let handle = CreateEventW(if described { &attributes } else { null() }, 0, 0, name.as_ptr());
+            if described {
+                LocalFree(descriptor);
+            }
+            (!handle.is_null()).then_some(Self(handle))
+        }
     }
 
-    pub fn handle(&self) -> HANDLE {
-        self.0
+    /// Blocks until another copy raises this signal.
+    pub fn wait(&self) {
+        unsafe { WaitForSingleObject(self.0, INFINITE) };
     }
 
-    /// Asks the running copy to quit and waits for it to let go. False if it is still running.
-    pub fn send_and_wait(timeout: std::time::Duration) -> bool {
-        let name = wide(Self::NAME);
+    /// Raises the running copy's signal. False when nothing is listening.
+    pub fn send(name: &str) -> bool {
+        let name = wide(name);
         unsafe {
             let handle = OpenEventW(EVENT_MODIFY_STATE, 0, name.as_ptr());
             if handle.is_null() {
                 return false;
             }
-            SetEvent(handle);
+            let raised = SetEvent(handle) != 0;
             CloseHandle(handle);
+            raised
+        }
+    }
+
+    /// Asks the running copy to quit and waits for it to let go. False if it is still running.
+    pub fn quit_and_wait(timeout: std::time::Duration) -> bool {
+        if !Self::send(Self::QUIT) {
+            return false;
         }
         let deadline = std::time::Instant::now() + timeout;
         while std::time::Instant::now() < deadline {
@@ -116,10 +150,69 @@ impl QuitSignal {
     }
 }
 
-impl Drop for QuitSignal {
+// An event handle may be waited on from any thread.
+unsafe impl Send for Signal {}
+
+impl Drop for Signal {
     fn drop(&mut self) {
         unsafe { CloseHandle(self.0) };
     }
+}
+
+const UNINSTALL_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\StarRailSim Sync";
+
+/// Lists the app under Settings > Apps > Installed apps, uninstalling through `--uninstall`.
+pub fn add_uninstall_entry(exe: &std::path::Path, install_dir: &std::path::Path) -> bool {
+    use windows_sys::Win32::System::Registry::{
+        HKEY, HKEY_CURRENT_USER, KEY_WRITE, REG_DWORD, REG_OPTION_NON_VOLATILE, REG_SZ, RegCloseKey, RegCreateKeyExW,
+        RegSetValueExW,
+    };
+    let exe = exe.to_string_lossy();
+    let uninstall = format!("\"{exe}\" --uninstall");
+    let text = [
+        ("DisplayName", crate::APP_NAME.to_owned()),
+        ("DisplayVersion", env!("CARGO_PKG_VERSION").to_owned()),
+        ("Publisher", "StarRailSim".to_owned()),
+        ("DisplayIcon", exe.to_string()),
+        ("InstallLocation", install_dir.to_string_lossy().into_owned()),
+        ("UninstallString", uninstall.clone()),
+        ("QuietUninstallString", uninstall),
+    ];
+    unsafe {
+        let mut key: HKEY = std::ptr::null_mut();
+        let path = wide(UNINSTALL_KEY);
+        let created = RegCreateKeyExW(
+            HKEY_CURRENT_USER,
+            path.as_ptr(),
+            0,
+            null(),
+            REG_OPTION_NON_VOLATILE,
+            KEY_WRITE,
+            null(),
+            &mut key,
+            std::ptr::null_mut(),
+        );
+        if created != 0 {
+            return false;
+        }
+        let mut ok = true;
+        for (name, value) in &text {
+            let (name, value) = (wide(name), wide(value));
+            ok &= RegSetValueExW(key, name.as_ptr(), 0, REG_SZ, value.as_ptr().cast(), (value.len() * 2) as u32) == 0;
+        }
+        for name in ["NoModify", "NoRepair"] {
+            let (name, one) = (wide(name), 1u32);
+            ok &= RegSetValueExW(key, name.as_ptr(), 0, REG_DWORD, (&raw const one).cast(), 4) == 0;
+        }
+        RegCloseKey(key);
+        ok
+    }
+}
+
+pub fn remove_uninstall_entry() {
+    use windows_sys::Win32::System::Registry::{HKEY_CURRENT_USER, RegDeleteTreeW};
+    let path = wide(UNINSTALL_KEY);
+    unsafe { RegDeleteTreeW(HKEY_CURRENT_USER, path.as_ptr()) };
 }
 
 pub fn message(text: &str) {
