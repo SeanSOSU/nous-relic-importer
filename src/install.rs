@@ -25,6 +25,15 @@ pub fn running_installed() -> bool {
     std::env::current_exe().map(canonical).ok() == Some(canonical(installed_exe()))
 }
 
+/// Whether the installed copy is byte-for-byte this executable: running it again is then a request to open
+/// the site, not an update, and the running copy keeps its game session.
+pub fn installed_is_current() -> bool {
+    match (std::env::current_exe().and_then(std::fs::read), std::fs::read(installed_exe())) {
+        (Ok(this), Ok(installed)) => this == installed,
+        _ => false,
+    }
+}
+
 /// Copies this executable into place and registers it to start at sign-in. Returns the installed path.
 pub fn install(task_args: &str) -> io::Result<PathBuf> {
     let target = installed_exe();
@@ -65,14 +74,18 @@ pub fn unregister_startup() -> io::Result<()> {
     if schtasks(&["/Delete", "/TN", APP_NAME, "/F"])? { Ok(()) } else { Err(io::Error::other("schtasks could not delete the task")) }
 }
 
-/// Removes the logon task and, once this process has exited, the installed folder.
+/// Removes the logon task and, once this process has exited, the installed folder and the logs.
 pub fn uninstall() -> io::Result<()> {
     if startup_registered() {
         unregister_startup()?;
     }
-    let dir = install_dir();
+    let (program, logs) = (install_dir(), crate::data_dir());
     Command::new("cmd.exe")
-        .raw_arg(format!("/C ping -n 3 127.0.0.1 >NUL & rmdir /S /Q \"{}\"", dir.display()))
+        .raw_arg(format!(
+            "/C ping -n 3 127.0.0.1 >NUL & rmdir /S /Q \"{}\" & rmdir /S /Q \"{}\"",
+            program.display(),
+            logs.display()
+        ))
         .creation_flags(CREATE_NO_WINDOW)
         .spawn()?;
     Ok(())
@@ -120,4 +133,24 @@ fn task_xml(user: &str, exe: &str, args: &str) -> String {
 </Task>
 "#
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::task_xml;
+
+    #[test]
+    fn task_xml_runs_the_installed_exe_elevated_with_no_time_limit() {
+        let exe = r"C:\Users\R&D\AppData\Local\Programs\StarRailSim Sync\starrailsim-sync.exe";
+        let args = r#"--background --site "http://localhost:5173/import""#;
+        let user = r"DESKTOP\R&D <Sean>";
+        let xml = task_xml(user, exe, args);
+        let doc = roxmltree::Document::parse(&xml).expect("well-formed task XML");
+        let text = |tag: &str| doc.descendants().find(|n| n.has_tag_name(tag)).and_then(|n| n.text()).unwrap_or_default().to_owned();
+        assert_eq!([text("Command"), text("Arguments"), text("UserId")], [exe, args, user]);
+        assert_eq!(
+            [text("RunLevel"), text("LogonType"), text("ExecutionTimeLimit"), text("StopIfGoingOnBatteries")],
+            ["HighestAvailable", "InteractiveToken", "PT0S", "false"]
+        );
+    }
 }

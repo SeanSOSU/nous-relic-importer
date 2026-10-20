@@ -5,11 +5,13 @@ use std::time::Duration;
 
 use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
 use tray_icon::{Icon, MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use windows_sys::Win32::Foundation::WAIT_OBJECT_0;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     DispatchMessageW, MSG, MsgWaitForMultipleObjects, PM_REMOVE, PeekMessageW, QS_ALLINPUT, TranslateMessage, WM_QUIT,
 };
 
 use crate::hub::{Hub, Status};
+use crate::win::QuitSignal;
 use crate::{APP_NAME, install};
 
 const GREY: [u8; 3] = [0x8a, 0x8f, 0x98];
@@ -55,7 +57,7 @@ fn icon(colour: [u8; 3]) -> Icon {
     Icon::from_rgba(rgba, SIZE, SIZE).expect("a 32x32 RGBA buffer is a valid icon")
 }
 
-pub fn run(hub: Hub, site: &str, task_args: &str) {
+pub fn run(hub: Hub, site: &str, task_args: &str, quit: &QuitSignal) {
     let status_item = MenuItem::new("Starting…", false, None);
     let open_item = MenuItem::new("Open StarRailSim", true, None);
     let startup_item = CheckMenuItem::new("Start with Windows", install::running_installed(), install::startup_registered(), None);
@@ -141,6 +143,19 @@ pub fn run(hub: Hub, site: &str, task_args: &str) {
             shown = Some(now);
         }
 
-        unsafe { MsgWaitForMultipleObjects(0, std::ptr::null(), 0, Duration::from_millis(250).as_millis() as u32, QS_ALLINPUT) };
+        // Wakes for window messages, the quit signal, or a quarter-second tick to pick up status changes.
+        let handles = [quit.handle()];
+        let woke = unsafe { MsgWaitForMultipleObjects(1, handles.as_ptr(), 0, Duration::from_millis(250).as_millis() as u32, QS_ALLINPUT) };
+        if woke == WAIT_OBJECT_0 {
+            return;
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn thousands_groups_digits() {
+        assert_eq!(["0", "999", "1,000", "1,234,567"], [0, 999, 1000, 1234567].map(super::thousands));
     }
 }

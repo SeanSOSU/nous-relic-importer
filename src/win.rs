@@ -6,7 +6,9 @@ use std::ptr::null;
 
 use windows_sys::Win32::Foundation::{CloseHandle, ERROR_ALREADY_EXISTS, GetLastError, HANDLE};
 use windows_sys::Win32::Security::{GetTokenInformation, TOKEN_ELEVATION, TOKEN_QUERY, TokenElevation};
-use windows_sys::Win32::System::Threading::{CreateMutexW, GetCurrentProcess, OpenProcessToken};
+use windows_sys::Win32::System::Threading::{
+    CreateEventW, CreateMutexW, EVENT_MODIFY_STATE, GetCurrentProcess, OpenEventW, OpenProcessToken, SetEvent,
+};
 use windows_sys::Win32::UI::Shell::ShellExecuteW;
 use windows_sys::Win32::UI::WindowsAndMessaging::{MB_ICONINFORMATION, MB_OK, MessageBoxW, SW_SHOWNORMAL};
 
@@ -71,6 +73,50 @@ impl SingleInstance {
 }
 
 impl Drop for SingleInstance {
+    fn drop(&mut self) {
+        unsafe { CloseHandle(self.0) };
+    }
+}
+
+/// Lets a newer copy ask the running one to step aside, so installing an update is just running it.
+pub struct QuitSignal(HANDLE);
+
+impl QuitSignal {
+    const NAME: &str = "Local\\StarRailSimSyncQuit";
+
+    pub fn create() -> Option<Self> {
+        let name = wide(Self::NAME);
+        let handle = unsafe { CreateEventW(null(), 1, 0, name.as_ptr()) };
+        (!handle.is_null()).then_some(Self(handle))
+    }
+
+    pub fn handle(&self) -> HANDLE {
+        self.0
+    }
+
+    /// Asks the running copy to quit and waits for it to let go. False if it is still running.
+    pub fn send_and_wait(timeout: std::time::Duration) -> bool {
+        let name = wide(Self::NAME);
+        unsafe {
+            let handle = OpenEventW(EVENT_MODIFY_STATE, 0, name.as_ptr());
+            if handle.is_null() {
+                return false;
+            }
+            SetEvent(handle);
+            CloseHandle(handle);
+        }
+        let deadline = std::time::Instant::now() + timeout;
+        while std::time::Instant::now() < deadline {
+            if !SingleInstance::other_running() {
+                return true;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(200));
+        }
+        false
+    }
+}
+
+impl Drop for QuitSignal {
     fn drop(&mut self) {
         unsafe { CloseHandle(self.0) };
     }

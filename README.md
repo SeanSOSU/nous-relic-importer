@@ -21,6 +21,9 @@ The tray icon says what it is doing: grey while it waits for the game, teal once
 when it needs you (log back in, or something stopped it). Left-click opens the site; right-click has
 **Start with Windows**, **Uninstall** and **Quit**.
 
+To update, download the new version and run it: it asks the running copy to quit and installs over it.
+Running the same version again just opens the site.
+
 Logs: `%LOCALAPPDATA%\StarRailSim Sync\sync.log`.
 
 ## Options
@@ -31,6 +34,7 @@ Logs: `%LOCALAPPDATA%\StarRailSim Sync\sync.log`.
 | `--allow-origin <origin>` | Also accept this page origin on the socket (repeatable) |
 | `--portable` | Run from where it is: no install, no sign-in task |
 | `--replay <export.json>` | Serve a saved Reliquary Archiver export instead of capturing; needs no admin |
+| `--no-tray` | No notification-area icon (for automated checks) |
 
 ## Building
 
@@ -41,12 +45,22 @@ cargo build --release
 The build downloads the game's resource tables (through Reliquary Archiver's build script), so it needs network
 access.
 
-**Every game patch** changes the game's protocol. Bump the `reliquary` and `reliquary-archiver` tags in
-`Cargo.toml` together, to the versions Reliquary Archiver's own release for that patch uses, rebuild and
-publish. Until then a new client's traffic cannot be decoded.
+**Every game patch** changes the game's protocol. Once Reliquary Archiver has released for the patch:
+
+1. `.\tools\update-exporter.ps1 <archiver tag>` re-copies its exporter into `src/export` and prints the
+   `reliquary` tag that release builds on.
+2. Set that tag on both `reliquary` entries in `Cargo.toml` (dependency and build-dependency).
+3. If the script warns that the archiver's `build.rs` changed, mirror its downloads in ours.
+4. `cargo test`, `cargo build --release`, and publish the new `starrailsim-sync.exe`.
+
+Until then a new client's traffic cannot be decoded.
+
+`src/export` is vendored rather than used as a dependency because the archiver's build script links its own
+icon and version details into anything that depends on it.
 
 ## Credits
 
 The packet decoding and the inventory export are [Reliquary](https://github.com/IceDynamix/reliquary) and
 [Reliquary Archiver](https://github.com/IceDynamix/reliquary-archiver) by IceDynamix and contributors (MIT).
-The capture loop in `src/capture.rs` is adapted from Reliquary Archiver.
+`src/export` is copied from Reliquary Archiver unchanged, and `src/capture.rs` and `build.rs` are adapted
+from it.

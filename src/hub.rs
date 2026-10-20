@@ -118,3 +118,23 @@ impl Hub {
         self.inner.clients.send_modify(|n| *n = n.saturating_sub(1));
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{Hub, Status};
+
+    #[test]
+    fn a_page_starts_from_the_snapshot_and_then_follows_the_frames() {
+        let hub = Hub::new();
+        let (before, mut early) = hub.subscribe();
+        assert!(before.is_none());
+
+        hub.publish_saved(serde_json::json!({ "metadata": { "uid": 600000001 }, "relics": [{ "_uid": "1" }, { "_uid": "2" }] }));
+        assert_eq!(*hub.status().borrow(), Status::Synced { relics: 2, uid: Some(600000001) });
+        assert!(early.try_recv().unwrap().contains(r#""event":"InitialScan""#));
+
+        let (snapshot, mut late) = hub.subscribe();
+        assert!(snapshot.unwrap().contains(r#""_uid":"2""#));
+        assert!(late.try_recv().is_err(), "a late page gets the snapshot, not a replay of old frames");
+    }
+}

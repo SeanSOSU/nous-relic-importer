@@ -77,13 +77,14 @@ impl Options {
     }
 }
 
-fn log_dir() -> PathBuf {
+/// Logs live here, apart from the program folder.
+pub fn data_dir() -> PathBuf {
     let base = std::env::var_os("LOCALAPPDATA").map(PathBuf::from).unwrap_or_else(std::env::temp_dir);
     base.join(APP_NAME)
 }
 
 fn init_logging() {
-    let dir = log_dir();
+    let dir = data_dir();
     std::fs::create_dir_all(&dir).ok();
     let Ok(file) = std::fs::File::create(dir.join("sync.log")) else { return };
     tracing_subscriber::fmt()
@@ -103,6 +104,10 @@ fn main() {
     };
 
     if options.replay.is_none() {
+        // This same build is already running: running it again only opens the site, without a UAC prompt.
+        if win::SingleInstance::other_running() && (install::running_installed() || install::installed_is_current()) {
+            return open_site();
+        }
         // pktmon only runs elevated.
         if !win::is_elevated() {
             if !win::relaunch_elevated() {
@@ -112,7 +117,11 @@ fn main() {
         }
         if !options.portable && !install::running_installed() {
             if win::SingleInstance::other_running() {
-                return open_site();
+                // A different build: an update. The running copy steps aside so this one can replace it.
+                if !win::QuitSignal::send_and_wait(std::time::Duration::from_secs(10)) {
+                    win::message("Quit StarRailSim Sync from its tray icon, then run this again to update it.");
+                    return;
+                }
             }
             let carried = options.carried_args();
             match install::install(&format!("--background {carried}")) {
@@ -136,6 +145,7 @@ fn main() {
     let Some(_instance) = win::SingleInstance::acquire() else {
         return open_site();
     };
+    let quit = win::QuitSignal::create().expect("creating the quit signal");
     tracing::info!(version = env!("CARGO_PKG_VERSION"), background = options.background, "started");
 
     let hub = hub::Hub::new();
@@ -173,15 +183,14 @@ fn main() {
         open_site();
     }
     if options.no_tray {
-        loop {
-            std::thread::park();
-        }
+        unsafe { windows_sys::Win32::System::Threading::WaitForSingleObject(quit.handle(), u32::MAX) };
+        return;
     }
-    tray::run(hub, &options.site, &format!("--background {}", options.carried_args()));
+    tray::run(hub, &options.site, &format!("--background {}", options.carried_args()), &quit);
 }
 
 #[cfg(not(windows))]
 fn main() {
-    let _ = (init_logging, Options::parse, log_dir);
+    let _ = (init_logging, Options::parse, data_dir);
     eprintln!("{APP_NAME} runs on Windows only.");
 }

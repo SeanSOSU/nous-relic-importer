@@ -35,6 +35,9 @@ windows-sys = { version = "0.61", features = [
 reliquary = { git = "https://github.com/IceDynamix/reliquary", tag = "v24.0.0", features = ["proto-rqa"] }
 ureq = { version = "2.12.1", features = ["json"] }
 
+[dev-dependencies]
+roxmltree = "0.20"
+
 [target.'cfg(windows)'.build-dependencies]
 winres = "0.1.12"
 
