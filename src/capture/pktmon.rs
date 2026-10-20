@@ -9,7 +9,7 @@ pub fn start() -> Result<impl Stream<Item = Vec<u8>> + Unpin, String> {
     let mut capture = Capture::new().map_err(|e| e.to_string())?;
     for port in GAME_PORTS {
         let filter = PktMonFilter {
-            name: format!("StarRailSim Sync {port}"),
+            name: format!("Nous Relic Importer {port}"),
             transport_protocol: Some(TransportProtocol::UDP),
             port: port.into(),
             ..PktMonFilter::default()

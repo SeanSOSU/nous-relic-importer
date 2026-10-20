@@ -4,6 +4,7 @@
 use serde_json::{Value, json};
 
 use crate::hub::{Hub, Status};
+use crate::update::{self, Request, Step};
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum Tone {
@@ -43,7 +44,8 @@ pub fn thousands(n: usize) -> String {
 }
 
 /// The one place the app words its state: the window's headline and next step, the tray's tooltip and colour.
-pub fn describe(status: &Status, clients: usize) -> (String, String, Tone) {
+/// `sending`: the Send to StarRailSim switch.
+pub fn describe(status: &Status, clients: usize, sending: bool) -> (String, String, Tone) {
     let (headline, detail, tone): (String, &str, Tone) = match status {
         Status::Starting => ("Starting…".into(), "", Tone::Idle),
         Status::Failed(why) => {
@@ -70,7 +72,9 @@ pub fn describe(status: &Status, clients: usize) -> (String, String, Tone) {
         ),
         Status::Synced { relics, fresh: true, .. } => (
             format!("Synced {} relics", thousands(*relics)),
-            if clients == 0 {
+            if !sending {
+                "Send to StarRailSim is off, so the site keeps what it last got. Changes in game are still saved here."
+            } else if clients == 0 {
                 "Open StarRailSim to load them."
             } else {
                 "StarRailSim is up to date. Changes you make in game show up there as they happen."
@@ -105,17 +109,63 @@ pub struct Setup {
 }
 
 #[cfg(windows)]
-const STARTUP: (&str, &str) =
-    ("Start with Windows", "Starts quietly when you sign in, so it is already running before you open the game.");
+const STARTUP: (&str, &str) = ("Start with Windows", "Starts quietly at sign-in, before you open the game.");
 #[cfg(not(windows))]
-const STARTUP: (&str, &str) =
-    ("Start when you log in", "Starts quietly when you log in, so it is already running before you open the game.");
+const STARTUP: (&str, &str) = ("Start when you log in", "Starts quietly at login, before you open the game.");
+
+pub const SENDING: (&str, &str) = ("Send to StarRailSim", "Your account and each change go to StarRailSim as you play.");
+
+/// The window's update line: what is happening, and the one thing it offers to do.
+pub fn describe_update(state: &update::State) -> Value {
+    let (text, action) = match &state.step {
+        Step::Off => return Value::Null,
+        Step::Waiting => ("Checks for a new version shortly.".to_owned(), Some(("check", "Check now"))),
+        Step::Checking => ("Checking for a new version…".to_owned(), None),
+        Step::Current { .. } => ("Up to date.".to_owned(), Some(("check", "Check now"))),
+        Step::Downloading { version } => (format!("Downloading version {version}…"), None),
+        Step::Ready { version } if state.auto => (
+            format!("Version {version} is ready. It installs by itself once the game has been closed for a few minutes."),
+            Some(("install", "Install now")),
+        ),
+        Step::Ready { version } if cfg!(windows) => (format!("Version {version} is ready to install."), Some(("install", "Install"))),
+        Step::Ready { version } => (
+            format!("Version {version} is ready. Installing it asks for your password, as the first install did."),
+            Some(("install", "Install")),
+        ),
+        Step::Available { version } => (format!("Version {version} is out."), Some(("download", "Download"))),
+        Step::Installing { version } => (format!("Installing version {version}…"), None),
+        Step::Failed { why } => (format!("Could not update: {why}."), Some(("check", "Try again"))),
+    };
+    json!({
+        "text": text,
+        "checkedAt": match state.step { Step::Current { at } => Some(at), _ => None },
+        "action": action.map(|a| a.0),
+        "actionLabel": action.map(|a| a.1),
+        "auto": state.auto,
+        "canAuto": state.can_auto,
+        "installing": matches!(state.step, Step::Installing { .. }),
+    })
+}
+
+/// The tray menu's update item: its label, and what a click asks for (None greys it out).
+pub fn update_item(state: &update::State) -> (String, Option<Request>) {
+    match &state.step {
+        Step::Off => ("Updates are off".into(), None),
+        Step::Checking => ("Checking for updates…".into(), None),
+        Step::Downloading { version } => (format!("Downloading version {version}…"), None),
+        Step::Installing { version } => (format!("Installing version {version}…"), None),
+        Step::Ready { version } => (format!("Install version {version}"), Some(Request::Install)),
+        Step::Available { version } => (format!("Download version {version}"), Some(Request::Download)),
+        Step::Waiting | Step::Current { .. } | Step::Failed { .. } => ("Check for updates".into(), Some(Request::Check)),
+    }
+}
 
 /// Everything the window page renders, and the headline and tone the tray shows.
-pub fn state(hub: &Hub, setup: &Setup) -> (String, Tone, Value) {
+pub fn state(hub: &Hub, setup: &Setup, update: &update::State) -> (String, Tone, Value) {
     let status = hub.status().borrow().clone();
     let clients = *hub.clients().borrow();
-    let (headline, detail, tone) = describe(&status, clients);
+    let sending = *hub.sending().borrow();
+    let (headline, detail, tone) = describe(&status, clients, sending);
     let (uid, updated_at, fresh) = match status {
         Status::Synced { uid, at, fresh, .. } => (uid, Some(at), fresh),
         _ => (None, None, false),
@@ -126,24 +176,43 @@ pub fn state(hub: &Hub, setup: &Setup) -> (String, Tone, Value) {
         "detail": detail,
         "tone": tone.name(),
         // Pulsing: an account from this session, feeding a page that is open right now.
-        "live": fresh && clients > 0,
+        "live": fresh && clients > 0 && sending,
         "fresh": fresh,
         "uid": uid,
         "updatedAt": updated_at,
         "summary": hub.summary(),
         "savedFile": hub.cache_file().map(|p| p.display().to_string()),
+        "sending": sending,
+        "sendingLabel": SENDING.0,
+        "sendingHint": SENDING.1,
         "startup": setup.startup,
         "startupLabel": STARTUP.0,
         "startupHint": STARTUP.1,
         "installed": setup.installed,
+        "update": describe_update(update),
     });
     (headline, tone, json)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{describe, thousands};
+    use super::{describe, describe_update, thousands, update_item};
     use crate::hub::Status;
+    use crate::update::{Request, State, Step};
+
+    #[test]
+    fn a_ready_update_says_when_it_installs_and_offers_to_install_now() {
+        let ready = |auto| State { step: Step::Ready { version: "0.2.0".into() }, auto, can_auto: auto };
+        let auto = describe_update(&ready(true));
+        assert!(auto["text"].as_str().unwrap().contains("closed for a few minutes"));
+        assert_eq!((auto["action"].as_str(), auto["actionLabel"].as_str()), (Some("install"), Some("Install now")));
+        assert_eq!(describe_update(&ready(false))["action"], "install");
+        assert_eq!(update_item(&ready(false)), ("Install version 0.2.0".to_owned(), Some(Request::Install)));
+        let off = State { step: Step::Off, auto: false, can_auto: false };
+        assert!(describe_update(&off).is_null(), "a build with no release key shows no update line");
+        let checking = State { step: Step::Checking, ..off };
+        assert_eq!(update_item(&checking).1, None, "nothing to click while it checks");
+    }
 
     #[test]
     fn thousands_groups_digits() {
@@ -153,10 +222,11 @@ mod tests {
     #[test]
     fn a_synced_account_points_at_the_site_until_a_page_is_open() {
         let synced = Status::Synced { relics: 1412, uid: Some(600000001), at: 0, fresh: true };
-        assert_eq!(describe(&synced, 0).0, "Synced 1,412 relics");
-        assert!(describe(&synced, 0).1.contains("Open StarRailSim"));
-        assert!(describe(&synced, 2).1.contains("up to date"));
+        assert_eq!(describe(&synced, 0, true).0, "Synced 1,412 relics");
+        assert!(describe(&synced, 0, true).1.contains("Open StarRailSim"));
+        assert!(describe(&synced, 2, true).1.contains("up to date"));
+        assert!(describe(&synced, 2, false).1.contains("is off"), "a paused page is not told it is up to date");
         let saved = Status::Synced { relics: 1412, uid: None, at: 0, fresh: false };
-        assert!(describe(&saved, 2).1.contains("last session"), "a saved copy never claims to be current");
+        assert!(describe(&saved, 2, true).1.contains("last session"), "a saved copy never claims to be current");
     }
 }

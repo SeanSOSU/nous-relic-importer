@@ -1,4 +1,4 @@
-//! StarRailSim Sync: reads your Honkai: Star Rail account from the game's own network traffic and serves it
+//! Nous Relic Importer: reads your Honkai: Star Rail account from the game's own network traffic and serves it
 //! to StarRailSim over a local socket, so the site's relic inventory follows the game without exports.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -14,15 +14,20 @@ mod install;
 mod linux;
 mod record;
 mod server;
+mod settings;
+#[cfg(any(windows, target_os = "linux"))]
+mod update;
 mod view;
 #[cfg(windows)]
 mod win;
 
 use std::path::PathBuf;
 
-pub const APP_NAME: &str = "StarRailSim Sync";
+pub const APP_NAME: &str = "Nous Relic Importer";
 // `?sync=1` turns sync on as the page opens, so arriving from the app needs no click there.
 const DEFAULT_SITE: &str = "https://starrailsim.com/import?sync=1";
+/// Where every copy looks for a newer one: the latest GitHub release's feed, as `nri-release sign` writes it.
+pub const UPDATE_FEED: &str = "https://github.com/SeanSOSU/nous-relic-importer/releases/latest/download/latest.json";
 pub const PORT: u16 = 23314;
 
 struct Options {
@@ -47,6 +52,12 @@ struct Options {
     record: Option<PathBuf>,
     /// Linux, run as root by pkexec at install: give the installed copy the capability to capture, then exit.
     grant_capture: bool,
+    /// Run by the updater from where it downloaded this build: replace the installed copy and start it.
+    update: bool,
+    /// The release feed the updater reads.
+    update_feed: String,
+    /// The arguments as given, for the copy an update starts.
+    given: Vec<String>,
 }
 
 impl Options {
@@ -63,8 +74,11 @@ impl Options {
             emulator: false,
             record: None,
             grant_capture: false,
+            update: false,
+            update_feed: UPDATE_FEED.to_owned(),
+            given: std::env::args().skip(1).collect(),
         };
-        let mut args = std::env::args().skip(1);
+        let mut args = options.given.clone().into_iter();
         while let Some(arg) = args.next() {
             match arg.as_str() {
                 "--background" => options.background = true,
@@ -74,17 +88,19 @@ impl Options {
                 "--headless" => options.headless = true,
                 "--emulator" => options.emulator = true,
                 "--grant-capture" => options.grant_capture = true,
+                "--update" => options.update = true,
                 "--record" => options.record = args.next().map(PathBuf::from),
                 "--site" => options.site = args.next().unwrap_or(options.site),
                 "--allow-origin" => options.allow_origins.extend(args.next()),
                 "--replay" => options.replay = args.next().map(PathBuf::from),
+                "--update-feed" => options.update_feed = args.next().unwrap_or(options.update_feed),
                 other => tracing::warn!(other, "unknown argument"),
             }
         }
         options
     }
 
-    /// What the installed copy is started with, so a custom site and origins survive the install.
+    /// What the installed copy is started with, so a custom site, origins and feed survive the install.
     fn carried(&self) -> Vec<String> {
         let mut args = Vec::new();
         if self.site != DEFAULT_SITE {
@@ -93,7 +109,27 @@ impl Options {
         for origin in &self.allow_origins {
             args.extend(["--allow-origin".to_owned(), origin.clone()]);
         }
+        if self.update_feed != UPDATE_FEED {
+            args.extend(["--update-feed".to_owned(), self.update_feed.clone()]);
+        }
         args
+    }
+
+    /// What the copy an update installs is started with: this run's arguments, less the one-time ones.
+    #[cfg(any(windows, target_os = "linux"))]
+    fn relaunch(&self) -> Vec<String> {
+        let once = ["--first-run", "--background", "--update"];
+        self.given.iter().filter(|a| !once.contains(&a.as_str())).cloned().collect()
+    }
+
+    /// For `--update`: the new copy starts as the running one did, with or without its window.
+    #[cfg(any(windows, target_os = "linux"))]
+    fn take_over(&self) -> ! {
+        let mut args = self.relaunch();
+        if self.background {
+            args.push("--background".to_owned());
+        }
+        std::process::exit(if update::take_over(&args) { 0 } else { 1 })
     }
 
     /// `carried`, as one Windows command line.
@@ -149,12 +185,12 @@ fn main() {
     if options.uninstall {
         if !win::is_elevated() {
             if !win::relaunch_elevated() {
-                win::message("Uninstalling StarRailSim Sync needs administrator access, to remove its sign-in task.");
+                win::message("Uninstalling Nous Relic Importer needs administrator access, to remove its sign-in task.");
             }
             return;
         }
         if win::SingleInstance::other_running() && !win::Signal::quit_and_wait(std::time::Duration::from_secs(10)) {
-            win::message("Quit StarRailSim Sync from its tray icon, then uninstall it again.");
+            win::message("Quit Nous Relic Importer from its tray icon, then uninstall it again.");
             return;
         }
         if let Err(e) = install::uninstall() {
@@ -162,6 +198,9 @@ fn main() {
             win::message(&format!("Uninstalling did not finish: {e}"));
         }
         return;
+    }
+    if options.update {
+        options.take_over();
     }
 
     if options.replay.is_none() && !options.emulator {
@@ -185,7 +224,7 @@ fn main() {
                 return;
             }
             if !win::relaunch_elevated() {
-                win::message("StarRailSim Sync needs administrator access to read the game's network traffic. Run it again and choose Yes.");
+                win::message("Nous Relic Importer needs administrator access to read the game's network traffic. Run it again and choose Yes.");
             }
             return;
         }
@@ -193,7 +232,7 @@ fn main() {
             if win::SingleInstance::other_running() {
                 // A different build: an update. The running copy steps aside so this one can replace it.
                 if !win::Signal::quit_and_wait(std::time::Duration::from_secs(10)) {
-                    win::message("Quit StarRailSim Sync from its tray icon, then run this again to update it.");
+                    win::message("Quit Nous Relic Importer from its tray icon, then run this again to update it.");
                     return;
                 }
             }
@@ -231,6 +270,8 @@ fn main() {
 
     let hub = hub::Hub::new(cache_file(&options));
     hub.restore();
+    hub.set_sending(settings::sending());
+    let updater = update::start(update::Plan::new(options.update_feed.clone(), options.relaunch(), options.background), hub.clone());
     {
         let hub = hub.clone();
         let origins = options.allow_origins.clone();
@@ -277,7 +318,7 @@ fn main() {
         task_args: format!("--background {}", options.carried_args()),
         show_window: !options.background,
     };
-    app::run(hub, launch, quit, show);
+    app::run(hub, updater, launch, quit, show);
 }
 
 /// The account is kept on disk between runs; a test against the emulator keeps its own file, and a replay none.
@@ -302,7 +343,7 @@ fn recorder(options: &Options) -> Option<std::sync::Arc<record::Recorder>> {
 /// Set on a copy started right after the password prompt granted the capability, so a system that does not
 /// honour it (a home folder mounted nosuid) explains itself instead of asking again.
 #[cfg(target_os = "linux")]
-const GRANTED: &str = "STARRAILSIM_SYNC_GRANTED";
+const GRANTED: &str = "NOUS_RELIC_IMPORTER_GRANTED";
 
 /// Asks for the capability for `exe`; false, having said why, when it was not given.
 #[cfg(target_os = "linux")]
@@ -312,13 +353,13 @@ fn may_capture(exe: &std::path::Path) -> bool {
         Grant::Granted => true,
         Grant::Refused => {
             linux::message(
-                "StarRailSim Sync needs your password once, to let it read the game's network traffic. Start it again and enter your password when asked. A Steam Deck has no password until you set one: open Konsole and run passwd.",
+                "Nous Relic Importer needs your password once, to let it read the game's network traffic. Start it again and enter your password when asked. A Steam Deck has no password until you set one: open Konsole and run passwd.",
             );
             false
         }
         Grant::Unavailable => {
             linux::message(&format!(
-                "This system has no password prompt for apps (pkexec), so StarRailSim Sync cannot ask for the permission it needs. Run this once in a terminal, then start it again:\n\n{}",
+                "This system has no password prompt for apps (pkexec), so Nous Relic Importer cannot ask for the permission it needs. Run this once in a terminal, then start it again:\n\n{}",
                 install::manual_grant(exe)
             ));
             false
@@ -343,6 +384,9 @@ fn main() {
         std::process::exit(2);
     }
     init_logging();
+    if options.update {
+        options.take_over();
+    }
     let open_site = || {
         open::that_detached(&options.site).ok();
     };
@@ -355,11 +399,11 @@ fn main() {
 
     if options.uninstall {
         if SingleInstance::other_running() && !Signal::quit_and_wait(Duration::from_secs(10)) {
-            message("Quit StarRailSim Sync from its tray icon, then uninstall it again.");
+            message("Quit Nous Relic Importer from its tray icon, then uninstall it again.");
             return;
         }
         match install::uninstall() {
-            Ok(()) => message("StarRailSim Sync is uninstalled."),
+            Ok(()) => message("Nous Relic Importer is uninstalled."),
             Err(e) => message(&format!("Uninstalling did not finish: {e}")),
         }
         return;
@@ -377,7 +421,7 @@ fn main() {
         if !options.portable && !install::running_installed() {
             // A different build: an update. The running copy steps aside so this one can replace it.
             if SingleInstance::other_running() && !Signal::quit_and_wait(Duration::from_secs(10)) {
-                message("Quit StarRailSim Sync from its tray icon, then run this again to update it.");
+                message("Quit Nous Relic Importer from its tray icon, then run this again to update it.");
                 return;
             }
             match install::install(&startup_args) {
@@ -400,7 +444,7 @@ fn main() {
             let exe = std::env::current_exe().unwrap_or_default();
             if std::env::var_os(GRANTED).is_some() {
                 message(&format!(
-                    "This system did not apply the permission to read network traffic, usually because the home folder does not allow it. Run this once in a terminal, then start StarRailSim Sync again:\n\n{}",
+                    "This system did not apply the permission to read network traffic, usually because the home folder does not allow it. Run this once in a terminal, then start Nous Relic Importer again:\n\n{}",
                     install::manual_grant(&exe)
                 ));
             } else if may_capture(&exe) {
@@ -424,6 +468,7 @@ fn main() {
 
     let hub = hub::Hub::new(cache_file(&options));
     hub.restore();
+    hub.set_sending(settings::sending());
     // The capture thread starts before the priority drops: the rest runs below normal, but it must keep up.
     let work = match socket {
         Some(Ok(socket)) => Work::Capture(Box::pin(socket.frames())),
@@ -438,6 +483,7 @@ fn main() {
         },
     };
     linux::lower_priority();
+    let updater = update::start(update::Plan::new(options.update_feed.clone(), options.relaunch(), options.background), hub.clone());
 
     if options.first_run {
         open_site();
@@ -450,7 +496,7 @@ fn main() {
         show_window: !options.background && !options.first_run && !options.headless,
         tray: !options.headless,
     };
-    linux::app::run(hub, launch, work, quit, show);
+    linux::app::run(hub, updater, launch, work, quit, show);
 }
 
 #[cfg(not(any(windows, target_os = "linux")))]

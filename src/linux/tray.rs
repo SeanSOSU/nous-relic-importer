@@ -8,12 +8,17 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use super::Action;
 use crate::APP_NAME;
-use crate::view::{Setup, Tone, disc};
+use crate::update::Request;
+use crate::view::{self, Setup, Tone, disc};
 
 pub struct SyncTray {
     pub headline: String,
     pub tone: Tone,
     pub setup: Setup,
+    /// The Send to StarRailSim switch.
+    pub sending: bool,
+    /// The update item's label and what a click asks for, as `view::update_item` words it.
+    pub update: (String, Option<Request>),
     pub actions: UnboundedSender<Action>,
 }
 
@@ -25,7 +30,7 @@ fn icon(tone: Tone, size: u32) -> Icon {
 
 impl ksni::Tray for SyncTray {
     fn id(&self) -> String {
-        "starrailsim-sync".into()
+        "nous-relic-importer".into()
     }
 
     fn title(&self) -> String {
@@ -58,15 +63,35 @@ impl ksni::Tray for SyncTray {
         vec![
             StandardItem { label: self.headline.clone(), enabled: false, ..Default::default() }.into(),
             MenuItem::Separator,
-            item("Show StarRailSim Sync", || Action::Show),
+            item("Show Nous Relic Importer", || Action::Show),
             item("Open StarRailSim", || Action::OpenSite),
             MenuItem::Separator,
+            CheckmarkItem {
+                label: view::SENDING.0.into(),
+                checked: self.sending,
+                activate: Box::new(|tray: &mut Self| {
+                    tray.actions.send(Action::Sending(!tray.sending)).ok();
+                }),
+                ..Default::default()
+            }
+            .into(),
             CheckmarkItem {
                 label: "Start when you log in".into(),
                 enabled: self.setup.installed,
                 checked: self.setup.startup,
                 activate: Box::new(|tray: &mut Self| {
                     tray.actions.send(Action::Startup(!tray.setup.startup)).ok();
+                }),
+                ..Default::default()
+            }
+            .into(),
+            StandardItem {
+                label: self.update.0.clone(),
+                enabled: self.update.1.is_some(),
+                activate: Box::new(|tray: &mut Self| {
+                    if let Some(request) = tray.update.1 {
+                        tray.actions.send(Action::Update(request)).ok();
+                    }
                 }),
                 ..Default::default()
             }

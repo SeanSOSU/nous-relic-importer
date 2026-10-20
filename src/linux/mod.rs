@@ -11,7 +11,10 @@ pub enum Action {
     Show,
     OpenSite,
     ShowFile,
+    /// The Send to StarRailSim switch.
+    Sending(bool),
     Startup(bool),
+    Update(crate::update::Request),
     Quit,
     Uninstall,
 }
@@ -24,7 +27,7 @@ use std::process::{Command, Stdio};
 /// Abstract sockets live in the network namespace, so each name carries the user it belongs to.
 fn address(name: &str) -> Option<SocketAddr> {
     let uid = unsafe { libc::getuid() };
-    SocketAddr::from_abstract_name(format!("starrailsim-sync-{uid}-{name}")).ok()
+    SocketAddr::from_abstract_name(format!("nous-relic-importer-{uid}-{name}")).ok()
 }
 
 /// Held for the life of the running copy; the kernel lets it go when the process ends, however it ends.

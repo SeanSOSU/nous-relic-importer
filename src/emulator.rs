@@ -97,6 +97,7 @@ pub async fn run(hub: Hub, recorder: Option<Arc<Recorder>>) {
         let mut accounts = Accounts::default();
         let mut buffers: HashMap<u32, Vec<u8>> = HashMap::new();
         while let Some((id, chunk)) = taps.recv().await {
+            reader.game_seen();
             let Some(chunk) = chunk else {
                 buffers.remove(&id);
                 info!(id, "game disconnected");

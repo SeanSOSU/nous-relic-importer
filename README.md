@@ -1,54 +1,85 @@
-# StarRailSim Sync
+# Nous Relic Importer
 
 Keeps [StarRailSim](https://starrailsim.com)'s relic inventory in step with your Honkai: Star Rail account. It
 reads the game's own network traffic on your PC, so every relic, light cone and character comes in without an
 export file, and changes you make in game show up on the site as they happen.
 
-Windows and Linux (the Steam Deck included). Nothing leaves your computer: the site connects to the app at
-`ws://127.0.0.1:23314/ws`, and only StarRailSim's own pages may open that socket.
+Windows and Linux (the Steam Deck included). **Download:** the
+[latest release](https://github.com/SeanSOSU/nous-relic-importer/releases/latest), `nous-relic-importer.exe` for
+Windows or `nous-relic-importer` for Linux.
+
+Your account never leaves your computer: the site connects to the app at `ws://127.0.0.1:23314/ws`, and only
+StarRailSim's own pages may open that socket. The one connection the app makes itself is its update check (see
+[Updates](#updates)).
 
 ## Using it on Windows
 
-1. Run `starrailsim-sync.exe` and accept the administrator prompt. Reading packets with Windows' built-in
+1. Run `nous-relic-importer.exe` and accept the administrator prompt. Reading packets with Windows' built-in
    packet monitor (pktmon) needs it.
-2. It installs itself to `%LOCALAPPDATA%\Programs\StarRailSim Sync`, adds a Start menu shortcut and an entry
+2. It installs itself to `%LOCALAPPDATA%\Programs\Nous Relic Importer`, adds a Start menu shortcut and an entry
    under Settings > Apps > Installed apps, registers to start when you sign in (a scheduled task with highest
-   privileges, so there is no prompt at each sign-in), then opens its window and StarRailSim's Import page.
-   Turn on sync there.
+   privileges, so there is no prompt at each sign-in), then opens its window and StarRailSim's Import page, which
+   connects to it. A browser that comes to the site another way connects with **Connect to the app** on that page,
+   once.
 3. Start the game and click to start. The game only hands out its session key at login, so if you were
-   already in game, log out and back in.
+   already in game, log out and back in. From then on every change in game (a new relic, an upgrade, a new
+   equip) reaches the site as it happens.
+
+**Send to StarRailSim**, in the window and the tray menu, is the one switch for the site: off, open pages keep what
+they have and say the app is paused; back on, they start over from the account as it is now. The account is still
+read and saved while it is off.
 
 The window says what it is doing and what to do next; closing it keeps sync running in the notification area.
 The tray icon is grey while it waits for the game, teal once your account is synced, and amber when it needs
 you (log back in, or something stopped it). Left-click it, or use the Start menu shortcut, to bring the window
 back; neither asks for administrator access again.
 
-To update, download the new version and run it: it asks the running copy to quit and installs over it.
-Uninstall from Settings > Apps > Installed apps, or with **Uninstall** in the window: both remove the program,
-the sign-in task, the shortcut and the logs.
+It updates itself (see [Updates](#updates)). Running a newer download by hand works too: it asks the running copy
+to quit and installs over it. Uninstall from Settings > Apps > Installed apps, or with **Uninstall** in the window:
+both remove the program, the sign-in task, the shortcut and the logs.
 
-Logs: `%LOCALAPPDATA%\StarRailSim Sync\sync.log`.
+Logs: `%LOCALAPPDATA%\Nous Relic Importer\sync.log`.
 
 ## Using it on Linux
 
-One file, `starrailsim-sync`, a static x86_64 build that runs on any distribution with nothing else installed.
+One file, `nous-relic-importer`, a static x86_64 build that runs on any distribution with nothing else installed.
 
 1. Mark it executable (file manager: Properties > Permissions, "Allow executing as program") and open it.
-2. It installs itself to `~/.local/share/starrailsim-sync`, adds itself to the app menu and to the desktop's
+2. It installs itself to `~/.local/share/nous-relic-importer`, adds itself to the app menu and to the desktop's
    login autostart, then asks for your password once, through the desktop's own prompt (polkit), to give the
-   installed copy one capability: CAP_NET_RAW, for reading packets. It opens StarRailSim's Import page; turn
-   on sync there.
-3. Start the game and click to start, as on Windows.
+   installed copy one capability: CAP_NET_RAW, for reading packets. It opens StarRailSim's Import page, which
+   connects to it.
+3. Start the game and click to start, as on Windows. **Send to StarRailSim** works the same way too.
 
 The capability stays on the file, so later starts ask nothing; the app opens its packet socket first thing,
 then drops the capability. Its tray icon (KDE and the Steam Deck's desktop mode, or GNOME with the
 AppIndicator extension Ubuntu ships) works like the Windows one. Its window is the same page, opened in your
 browser from the app itself at `http://127.0.0.1:23314/` with a token only the app hands out; starting the app
-again from the app menu opens it, tray or not. An update replaces the file, so it asks for the password again.
-Uninstall from the app menu entry's **Uninstall** action, or with **Uninstall** in the window.
+again from the app menu opens it, tray or not. An update replaces the file, so installing one asks for the password
+again. Uninstall from the app menu entry's **Uninstall** action, or with **Uninstall** in the window.
 
 On a Steam Deck the `deck` user has no password until you set one (`passwd` in Konsole), and the app runs in
-desktop mode only. Logs and the saved account: `~/.local/state/starrailsim-sync`.
+desktop mode only. Logs and the saved account: `~/.local/state/nous-relic-importer`.
+
+## Updates
+
+Every game patch changes the game's protocol, so every patch needs a new version of the app. A few seconds after it
+starts (a minute and a half when it starts at sign-in), and every six hours after that, the app reads the release
+feed: `latest.json` on the latest GitHub release. It sends nothing but the request. A newer version is downloaded
+and checked against the release key built into the app (`update-key.pub`, a minisign key). Its signature must also
+name that exact version and platform, so a tampered file, an older genuine build or another platform's build is
+refused. The verified file waits beside the installed copy, then takes over the way a hand-run update does: it asks
+the running copy to quit, copies itself into place and starts. Start-at-sign-in stays as the reader left it.
+
+- **Windows** installs it by itself once the game has sent nothing for five minutes, so an update never cuts into a
+  game session. The window has **Install now**, and an **Install updates automatically** switch; turned off, the
+  update waits for **Install**.
+- **Linux** downloads it by itself and waits for **Install** in the window or the tray, since the new file needs
+  the password once more for its capture permission.
+- A copy run with `--portable` is never replaced: the window points at the new download instead.
+
+A version that downloaded but could not replace the installed copy is left alone for a day. The tray's **Check for
+updates** and the window's **Check now** read the feed at once. The window shows each step.
 
 ## Options
 
@@ -63,11 +94,12 @@ desktop mode only. Logs and the saved account: `~/.local/state/starrailsim-sync`
 | `--background` | Start without the window (what the sign-in task passes) |
 | `--emulator` | Test against the PearlSR emulator instead of the live game (no admin, nothing installed) |
 | `--grant-capture` | Linux: what the password prompt runs, as root, to give the installed copy CAP_NET_RAW |
+| `--update-feed <url>` | Read updates from this feed instead of the latest GitHub release's (HTTPS, or HTTP to this machine) |
+| `--update` | What the updater runs a downloaded version with: replace the installed copy and start it |
 
 ## Testing without a live account
 
-Start the PearlSR lab stack with the client (`hsr-harness\restart-lab.ps1 -LaunchClient`), then run
-`starrailsim-sync.exe --emulator` before the client logs in. PearlSR speaks the live game's protocol (same
+Start the PearlSR emulator, then run `nous-relic-importer.exe --emulator` before its game client logs in. PearlSR speaks the live game's protocol (same
 command ids and protobufs as the `reliquary` tag here) but over plain TCP on loopback with no encryption, which
 packet capture cannot see. So this mode relays the client's connection instead: it listens on
 `127.0.0.1:23301`, which Windows prefers over PearlSR's `0.0.0.0:23301`, passes everything through to PearlSR
@@ -86,9 +118,9 @@ access.
 Linux, in Docker (the image is the build environment and the test bench), from the repo:
 
 ```
-docker build -t starrailsim-sync-linux -f tools/linux.Dockerfile tools
-docker run --rm --cpus 2 -v "$PWD:/src:ro" -v srs-cargo:/usr/local/cargo/registry -v srs-git:/usr/local/cargo/git \
-  -v srs-target:/target -e CARGO_TARGET_DIR=/target -w /src starrailsim-sync-linux \
+docker build -t nous-relic-importer-linux -f tools/linux.Dockerfile tools
+docker run --rm --cpus 2 -v "$PWD:/src:ro" -v nri-cargo:/usr/local/cargo/registry -v nri-git:/usr/local/cargo/git \
+  -v nri-target:/target -e CARGO_TARGET_DIR=/target -w /src nous-relic-importer-linux \
   cargo build --locked --release --target x86_64-unknown-linux-musl
 ```
 
@@ -105,9 +137,50 @@ must both have the account; then it quits and uninstalls. The packet socket's ow
 2. Set that tag on every `reliquary` entry: `Cargo.toml`, `core/Cargo.toml` (dependency and
    build-dependency) and `decoder/Cargo.toml`.
 3. If the script warns that the archiver's `build.rs` changed, mirror its downloads in `core/build.rs`.
-4. `cargo test`, the release builds, and publish the new `starrailsim-sync.exe` and Linux `starrailsim-sync`.
+4. Raise `version` in `Cargo.toml`, `cargo test`, the release builds, and publish them (below). Installed copies
+   pick the new version up within six hours.
 
 Until then a new client's traffic cannot be decoded.
+
+### Publishing a release
+
+Every release is signed with the release key, whose public half is `update-key.pub`. Keep the secret half out of the
+repo (`*.key` is ignored) and back it up. If it is lost, installed copies can only move to a build with a new key by
+hand. If it leaks, anyone who can serve the feed can push an update. `nri-release keygen <secret key file>
+update-key.pub` makes a new one, protected by a password if you add `--password`.
+
+1. Raise `version` in `Cargo.toml` and build both platforms (above).
+2. Sign the builds and write the feed into `dist/`:
+
+   ```
+   cargo run -p nri-release -- sign --key <secret key file> --out dist \
+     --base-url https://github.com/SeanSOSU/nous-relic-importer/releases/download/v0.2.0/ \
+     windows-x86_64=target/release/nous-relic-importer.exe linux-x86_64=<the Linux build>
+   ```
+
+   It refuses a build of any version other than the one in `Cargo.toml` (each build carries its version in a marker),
+   and a key other than the one `update-key.pub` holds.
+3. Publish `dist/` as that release: `gh release create v0.2.0 dist/* --title "Nous Relic Importer 0.2.0"`. The installed
+   copies read `releases/latest/download/latest.json`, so the newest release must not be a draft or prerelease.
+
+`cargo run -p nri-release -- verify <download>`, with the download's `.minisig` beside it, checks a download by hand
+and says what it is signed as (`minisign -Vm <download> -p update-key.pub` does too).
+
+### Testing updates
+
+`cargo test` covers the updater against feeds it serves itself: a newer signed build is staged, and anything else is
+refused: a tampered file, an older genuine build passed off as newer, another key's signature, and a version that
+already failed to install. End to end, build two versions that trust a test key (`NRI_UPDATE_KEY=<its base64 line>`
+at build time). Sign the newer one with `nri-release sign --public <test public key> --version <its version>
+--base-url http://127.0.0.1:8765/`, then:
+
+- **Windows:** `tools\windows-update-e2e.ps1 -Old <older build> -Feed <signed folder>` installs the older one under a
+  scratch `LOCALAPPDATA`. It checks the hand-over happens by itself with no game running, and with `-Phase active`
+  that it waits out a game session (`--emulator` traffic) and five quiet minutes first. It needs no admin and
+  touches no real install.
+- **Linux:** `tools/linux-update-e2e.sh <older build> <signed folder>`, as root in the Docker image, installs the
+  older build as a normal user, switches starting at login off, and installs the update from the window. It checks
+  the new file was granted the capability and that starting at login stayed off.
 
 `core/src/export` is vendored rather than used as a dependency because the archiver's build script links its
 own icon and version details into anything that depends on it.

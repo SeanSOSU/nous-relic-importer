@@ -14,6 +14,7 @@ use tokio::sync::{mpsc, watch};
 
 use super::Action;
 use crate::hub::Hub;
+use crate::update::{Request, Updater};
 use crate::view::{self, Setup};
 
 const UI: &str = include_str!("../ui.html");
@@ -23,6 +24,7 @@ pub struct Window {
     pub token: Arc<str>,
     pub hub: Hub,
     pub setup: watch::Receiver<Setup>,
+    pub updater: Updater,
     pub actions: mpsc::UnboundedSender<Action>,
 }
 
@@ -68,20 +70,24 @@ fn action(message: &str) -> Option<Action> {
     Some(match message {
         "open-site" => Action::OpenSite,
         "show-file" => Action::ShowFile,
+        "sending-on" => Action::Sending(true),
+        "sending-off" => Action::Sending(false),
         "startup-on" => Action::Startup(true),
         "startup-off" => Action::Startup(false),
         "quit" => Action::Quit,
         "uninstall" => Action::Uninstall,
-        _ => return None,
+        other => Action::Update(Request::from_message(other)?),
     })
 }
 
 /// Sends the page its state now and after every change, and passes its buttons on as actions.
 async fn serve(mut socket: WebSocket, window: Window) {
     let (mut status, mut clients, mut setup) = (window.hub.status(), window.hub.clients(), window.setup.clone());
+    let (mut updates, mut sending) = (window.updater.subscribe(), window.hub.sending());
     loop {
         let current = *setup.borrow_and_update();
-        let (_, _, state) = view::state(&window.hub, &current);
+        let update = updates.borrow_and_update().clone();
+        let (_, _, state) = view::state(&window.hub, &current, &update);
         if socket.send(Message::Text(state.to_string().into())).await.is_err() {
             return;
         }
@@ -90,6 +96,8 @@ async fn serve(mut socket: WebSocket, window: Window) {
                 r = status.changed() => r.is_ok(),
                 r = clients.changed() => r.is_ok(),
                 r = setup.changed() => r.is_ok(),
+                r = updates.changed() => r.is_ok(),
+                r = sending.changed() => r.is_ok(),
                 message = socket.recv() => match message {
                     Some(Ok(Message::Text(text))) => {
                         match action(text.as_str()) {

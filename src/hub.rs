@@ -4,8 +4,9 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use sync_core::export::Exporter;
 use sync_core::export::fribbels::{OptimizerEvent, OptimizerExporter};
@@ -88,6 +89,8 @@ pub struct Hub {
 struct Inner {
     status: watch::Sender<Status>,
     clients: watch::Sender<usize>,
+    /// Whether pages get the account: the reader's Send to StarRailSim switch.
+    sending: watch::Sender<bool>,
     frames: broadcast::Sender<Frame>,
     // The current account as one InitialScan frame. Held under the same lock a subscriber takes, so a page
     // never misses a delta that lands between its snapshot and its subscription.
@@ -97,6 +100,9 @@ struct Inner {
     export: Arc<Mutex<Option<Arc<str>>>>,
     saves: Option<mpsc::Sender<()>>,
     cache: Option<PathBuf>,
+    // When the game last sent anything, in milliseconds after `started`, plus one: 0 is never.
+    started: Instant,
+    last_game: AtomicU64,
 }
 
 fn initial_scan(export_json: &str) -> Frame {
@@ -131,14 +137,32 @@ impl Hub {
             inner: Arc::new(Inner {
                 status: watch::channel(Status::Starting).0,
                 clients: watch::channel(0).0,
+                sending: watch::channel(true).0,
                 frames: broadcast::channel(64).0,
                 snapshot: Mutex::new(None),
                 summary: Mutex::new(None),
                 export,
                 saves,
                 cache,
+                started: Instant::now(),
+                last_game: AtomicU64::new(0),
             }),
         }
+    }
+
+    fn since_start(&self) -> u64 {
+        self.inner.started.elapsed().as_millis() as u64 + 1
+    }
+
+    /// Notes game traffic, so an update never restarts the app while a session is being read.
+    pub fn game_seen(&self) {
+        self.inner.last_game.store(self.since_start(), Ordering::Relaxed);
+    }
+
+    /// Whether the game has sent nothing for `quiet`, or nothing at all since the app started.
+    pub fn game_quiet_for(&self, quiet: Duration) -> bool {
+        let last = self.inner.last_game.load(Ordering::Relaxed);
+        last == 0 || self.since_start() - last >= quiet.as_millis() as u64
     }
 
     pub fn status(&self) -> watch::Receiver<Status> {
@@ -147,6 +171,15 @@ impl Hub {
 
     pub fn clients(&self) -> watch::Receiver<usize> {
         self.inner.clients.subscribe()
+    }
+
+    pub fn sending(&self) -> watch::Receiver<bool> {
+        self.inner.sending.subscribe()
+    }
+
+    /// Off, open pages are told the app is paused and keep what they have; on, they start over from the account.
+    pub fn set_sending(&self, on: bool) {
+        self.inner.sending.send_if_modified(|current| std::mem::replace(current, on) != on);
     }
 
     pub fn set_status(&self, status: Status) {
@@ -275,7 +308,7 @@ mod tests {
 
     #[test]
     fn the_last_account_is_saved_and_the_next_start_begins_from_it() {
-        let dir = std::env::temp_dir().join(format!("srs-hub-test-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("nri-hub-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let file = dir.join("last-import.json");
         std::fs::remove_file(&file).ok();
@@ -296,6 +329,17 @@ mod tests {
         assert!(matches!(*next.status().borrow(), Status::Synced { relics: 1, uid: Some(7), fresh: false, .. }));
         assert!(next.subscribe().0.unwrap().starts_with(r#"{"event":"InitialScan","data":{"#));
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn the_game_is_quiet_until_it_sends_something_and_for_as_long_as_it_has_not() {
+        let hub = Hub::new(None);
+        let minutes = std::time::Duration::from_secs(300);
+        assert!(hub.game_quiet_for(minutes), "no game since the app started");
+        hub.game_seen();
+        assert!(!hub.game_quiet_for(minutes));
+        std::thread::sleep(std::time::Duration::from_millis(30));
+        assert!(hub.game_quiet_for(std::time::Duration::from_millis(20)));
     }
 
     #[test]

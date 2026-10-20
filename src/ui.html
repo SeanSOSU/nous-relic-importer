@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="referrer" content="no-referrer">
-<title>StarRailSim Sync</title>
+<title>Nous Relic Importer</title>
 <style>
   :root {
     --page: #0a0f1c;
@@ -89,6 +89,10 @@
   label.toggle input { width: 16px; height: 16px; accent-color: var(--ok); margin: 0; }
   label.toggle[aria-disabled="true"] { cursor: default; color: var(--muted); }
   .hint { margin: 4px 0 0 26px; color: var(--muted); font-size: 12px; }
+  .setting + .setting { margin-top: 12px; }
+  .hint.flush { margin-left: 0; }
+  .link { font: inherit; color: var(--ok); background: none; border: none; padding: 0; cursor: pointer; }
+  .link:hover { text-decoration: underline; }
 
   footer { margin-top: auto; padding-top: 12px; display: flex; align-items: center; gap: 14px; color: var(--muted); font-size: 12px; }
   footer p { margin: 0; flex: 1; }
@@ -123,11 +127,27 @@
   <button class="primary" type="button" id="open">Open StarRailSim</button>
 
   <section class="settings">
-    <label class="toggle" id="startup-label">
-      <input type="checkbox" id="startup">
-      <span id="startup-text">Start with Windows</span>
-    </label>
-    <p class="hint" id="startup-hint"></p>
+    <div class="setting">
+      <label class="toggle">
+        <input type="checkbox" id="sending">
+        <span id="sending-text">Send to StarRailSim</span>
+      </label>
+      <p class="hint" id="sending-hint"></p>
+    </div>
+    <div class="setting">
+      <label class="toggle" id="startup-label">
+        <input type="checkbox" id="startup">
+        <span id="startup-text">Start with Windows</span>
+      </label>
+      <p class="hint" id="startup-hint"></p>
+    </div>
+    <div class="setting" id="updates" hidden>
+      <label class="toggle" id="auto-label">
+        <input type="checkbox" id="auto">
+        <span>Install updates automatically</span>
+      </label>
+      <p class="hint" id="update-line"><span id="update-text"></span> <button type="button" class="link" id="update-action" hidden></button></p>
+    </div>
   </section>
 
   <footer>
@@ -143,14 +163,17 @@
 
   // In a browser (the Linux app opens its window there) the app's local socket stands in for the web view's
   // bridge. The page's own address carries the token the socket asks for.
+  let updating = false;
   if (!window.ipc && location.protocol === "http:") {
     const waiting = [];
     const socket = new WebSocket(`ws://${location.host}/ui${location.search}`);
     socket.onopen = () => waiting.splice(0).forEach((m) => socket.send(m));
     socket.onmessage = (e) => window.render(JSON.parse(e.data));
     socket.onclose = () => {
-      $("headline").textContent = "StarRailSim Sync is not running";
-      $("detail").textContent = "Start it from your app menu, then reload this page.";
+      $("headline").textContent = updating ? "Installing the update" : "Nous Relic Importer is not running";
+      $("detail").textContent = updating
+        ? "The new version opens its own window in a moment, once you have entered your password."
+        : "Start it from your app menu, then reload this page.";
       document.documentElement.style.setProperty("--tone", TONES.warn);
       Object.assign($("dot").dataset, { tone: "warn", live: "false" });
       document.querySelectorAll("button, input").forEach((el) => (el.disabled = true));
@@ -171,13 +194,12 @@
     return img;
   }
 
-  const when = (ms, fresh) => {
+  const stamp = (ms) => {
     const d = new Date(ms);
-    const today = d.toDateString() === new Date().toDateString();
     const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    const stamp = today ? time : d.toLocaleDateString([], { month: "short", day: "numeric" }) + ", " + time;
-    return (fresh ? "updated " : "saved ") + stamp;
+    return d.toDateString() === new Date().toDateString() ? time : d.toLocaleDateString([], { month: "short", day: "numeric" }) + ", " + time;
   };
+  const when = (ms, fresh) => (fresh ? "updated " : "saved ") + stamp(ms);
 
   let drawn = { faces: "", sets: "", updatedAt: null };
   window.render = (s) => {
@@ -232,24 +254,43 @@
       }
     }
 
-    $("startup-text").textContent = s.startupLabel || "Start with Windows";
+    $("sending-text").textContent = s.sendingLabel;
+    $("sending").checked = s.sending;
+    $("sending-hint").textContent = s.sending ? s.sendingHint : "Off: the site keeps what it last got.";
+    $("startup-text").textContent = s.startupLabel;
     $("startup").checked = s.startup;
     $("startup").disabled = !s.installed;
     $("startup-label").setAttribute("aria-disabled", String(!s.installed));
     $("startup-hint").textContent = s.installed
-      ? s.startupHint || "Starts quietly when you sign in, so it is already running before you open the game."
+      ? s.startupHint
       : "Available once installed: run the downloaded file without --portable.";
     $("uninstall").hidden = !s.installed;
     $("saved-file").hidden = !s.savedFile;
     $("saved-file").title = s.savedFile || "";
+
+    const u = s.update;
+    $("updates").hidden = !u;
+    if (u) {
+      $("auto-label").hidden = !u.canAuto;
+      $("auto").checked = u.auto;
+      $("update-line").classList.toggle("flush", !u.canAuto);
+      $("update-text").textContent = u.text + (u.checkedAt ? " Last checked " + stamp(u.checkedAt) + "." : "");
+      $("update-action").hidden = !u.action;
+      $("update-action").textContent = u.actionLabel || "";
+      $("update-action").dataset.action = u.action || "";
+      updating = u.installing;
+    }
   };
 
   $("open").addEventListener("click", () => send("open-site"));
   $("saved-file").addEventListener("click", () => send("show-file"));
+  $("sending").addEventListener("change", (e) => send(e.target.checked ? "sending-on" : "sending-off"));
   $("startup").addEventListener("change", (e) => send(e.target.checked ? "startup-on" : "startup-off"));
+  $("auto").addEventListener("change", (e) => send(e.target.checked ? "update-auto-on" : "update-auto-off"));
+  $("update-action").addEventListener("click", (e) => send("update-" + e.target.dataset.action));
   $("quit").addEventListener("click", () => send("quit"));
   $("uninstall").addEventListener("click", () => {
-    if (confirm("Uninstall StarRailSim Sync? It stops syncing and removes itself from this computer.")) send("uninstall");
+    if (confirm("Uninstall Nous Relic Importer? It stops syncing and removes itself from this computer.")) send("uninstall");
   });
   document.addEventListener("contextmenu", (e) => e.preventDefault());
   send("ready");

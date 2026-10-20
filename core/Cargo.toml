@@ -3,7 +3,7 @@ name = "sync-core"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
-description = "What the StarRailSim Sync app and its capture-file decoder share: the inventory exporter and the game-frame reader"
+description = "What the Nous Relic Importer app and its capture-file decoder share: the inventory exporter and the game-frame reader"
 
 [dependencies]
 # Keep this tag the same as the app's and the decoder's; tools/update-exporter.ps1 prints the one to use.

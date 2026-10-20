@@ -18,7 +18,7 @@ pub fn install_dir() -> PathBuf {
 }
 
 pub fn installed_exe() -> PathBuf {
-    install_dir().join("starrailsim-sync.exe")
+    install_dir().join("nous-relic-importer.exe")
 }
 
 pub fn running_installed() -> bool {
@@ -40,10 +40,11 @@ fn shortcut() -> PathBuf {
     base.join(r"Microsoft\Windows\Start Menu\Programs").join(format!("{APP_NAME}.lnk"))
 }
 
-/// Copies this executable into place, adds the Start menu shortcut and registers it to start at sign-in.
-/// Returns the installed path.
+/// Copies this executable into place, adds the Start menu shortcut and registers it to start at sign-in, unless
+/// this replaces a copy whose reader switched that off. Returns the installed path.
 pub fn install(task_args: &str) -> io::Result<PathBuf> {
     let target = installed_exe();
+    let replacing = target.exists();
     std::fs::create_dir_all(install_dir())?;
     std::fs::copy(std::env::current_exe()?, &target)?;
     if let Err(e) = add_shortcut(&target) {
@@ -52,7 +53,9 @@ pub fn install(task_args: &str) -> io::Result<PathBuf> {
     if !crate::win::add_uninstall_entry(&target, &install_dir()) {
         tracing::warn!("no Installed apps entry");
     }
-    register_startup(task_args)?;
+    if !replacing || startup_registered() {
+        register_startup(task_args)?;
+    }
     Ok(target)
 }
 
@@ -100,7 +103,7 @@ pub fn register_startup(task_args: &str) -> io::Result<()> {
     // schtasks reads task XML as UTF-16.
     let mut bytes = vec![0xFF, 0xFE];
     bytes.extend(xml.encode_utf16().flat_map(u16::to_le_bytes));
-    let file = std::env::temp_dir().join("starrailsim-sync-task.xml");
+    let file = std::env::temp_dir().join("nous-relic-importer-task.xml");
     std::fs::write(&file, bytes)?;
     let created = schtasks(&["/Create", "/TN", APP_NAME, "/XML", &file.to_string_lossy(), "/F"]);
     std::fs::remove_file(&file).ok();
@@ -186,7 +189,7 @@ mod tests {
 
     #[test]
     fn task_xml_runs_the_installed_exe_elevated_with_no_time_limit() {
-        let exe = r"C:\Users\R&D\AppData\Local\Programs\StarRailSim Sync\starrailsim-sync.exe";
+        let exe = r"C:\Users\R&D\AppData\Local\Programs\Nous Relic Importer\nous-relic-importer.exe";
         let args = r#"--background --site "http://localhost:5173/import""#;
         let user = r"DESKTOP\R&D <Sean>";
         let xml = task_xml(user, exe, args);

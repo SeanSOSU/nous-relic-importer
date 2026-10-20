@@ -10,7 +10,7 @@ use std::process::Command;
 
 use crate::APP_NAME;
 
-const ID: &str = "starrailsim-sync";
+const ID: &str = "nous-relic-importer";
 const ICON: &[u8] = include_bytes!("../../assets/icon.png");
 
 fn home() -> PathBuf {
@@ -103,10 +103,12 @@ fn write(path: &Path, contents: &[u8]) -> io::Result<()> {
     std::fs::write(path, contents)
 }
 
-/// Copies this executable into place, adds the menu entry and its icon, and registers it to start at login.
-/// Returns the installed path. The copy has no capability yet: see `grant_capture`.
+/// Copies this executable into place, adds the menu entry and its icon, and registers it to start at login,
+/// unless this replaces a copy whose reader switched that off. Returns the installed path. The copy has no
+/// capability yet: see `grant_capture`.
 pub fn install(startup_args: &[String]) -> io::Result<PathBuf> {
     let target = installed_exe();
+    let replacing = target.exists();
     std::fs::create_dir_all(install_dir())?;
     // Beside the target and renamed over it: a running copy keeps its old file until it exits.
     let temporary = target.with_extension("new");
@@ -117,7 +119,9 @@ pub fn install(startup_args: &[String]) -> io::Result<PathBuf> {
         tracing::warn!(%e, "no menu icon");
     }
     write(&menu_entry(), desktop_entry(&target, &[], false).as_bytes())?;
-    register_startup(startup_args)?;
+    if !replacing || startup_registered() {
+        register_startup(startup_args)?;
+    }
     Ok(target)
 }
 
@@ -198,10 +202,10 @@ mod tests {
 
     #[test]
     fn exec_lines_quote_and_escape_as_the_spec_asks() {
-        let exe = Path::new("/home/a b/.local/share/starrailsim-sync/starrailsim-sync");
+        let exe = Path::new("/home/a b/.local/share/nous-relic-importer/nous-relic-importer");
         assert_eq!(
             exec_line(exe, &["--site".into(), "http://localhost:5173/import?a=$1".into()]),
-            r#""/home/a b/.local/share/starrailsim-sync/starrailsim-sync" "--site" "http://localhost:5173/import?a=\\$1""#
+            r#""/home/a b/.local/share/nous-relic-importer/nous-relic-importer" "--site" "http://localhost:5173/import?a=\\$1""#
         );
         let entry = desktop_entry(exe, &["--background".into()], true);
         assert!(entry.contains("X-GNOME-Autostart-enabled=true") && !entry.contains("Desktop Action"));

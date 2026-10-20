@@ -1,0 +1,11 @@
+[package]
+name = "nri-release"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+description = "Makes the Nous Relic Importer release key, signs each release's builds and writes the update feed the app reads"
+
+[dependencies]
+minisign = "0.7"
+serde_json = "1"

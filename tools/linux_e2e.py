@@ -6,13 +6,17 @@ the app's two sockets as the site and as the window page would.
   linux_e2e.py refused <ws url> <origin>           exit 0 if the socket refuses this origin
   linux_e2e.py page <http url>                     GET the window page; print the status and whether it is the page
   linux_e2e.py window <ws url> <origin> [msg...]   the window's socket: print each state, sending msg after each
+  linux_e2e.py until <ws url> <origin> <regex> <s> the window's socket: wait for a state whose update line matches
+  linux_e2e.py events <ws url> <origin> <s>        the site's socket: print each message's event (and relic count)
 """
 import base64
 import json
 import os
+import re
 import socket
 import struct
 import sys
+import time
 import urllib.parse
 
 
@@ -82,6 +86,15 @@ def send(s, text):
     s.sendall(header + mask + bytes(b ^ mask[i % 4] for i, b in enumerate(data)))
 
 
+def shown(state):
+    """The parts of a window state the tests look at, on one line."""
+    update = state.get("update") or {}
+    keys = ("headline", "detail", "tone", "installed", "sending", "startup", "startupLabel", "version")
+    return json.dumps({k: state.get(k) for k in keys}
+                      | {"relics": (state.get("summary") or {}).get("relics"),
+                         "update": update.get("text"), "updateAction": update.get("action")})
+
+
 def main():
     command, args = sys.argv[1], sys.argv[2:]
     if command == "inject":
@@ -111,7 +124,7 @@ def main():
         while chunk := s.recv(65536):
             response += chunk
         status = int(response.split(b" ", 2)[1])
-        print(json.dumps({"status": status, "page": b"<title>StarRailSim Sync</title>" in response,
+        print(json.dumps({"status": status, "page": b"<title>Nous Relic Importer</title>" in response,
                           "no_referrer": b"referrer-policy: no-referrer" in response.lower()}))
     elif command == "window":
         s, status = connect(args[0], args[1])
@@ -124,8 +137,33 @@ def main():
             except (EOFError, ConnectionError):
                 print(json.dumps({"closed": True}))
                 break
-            print(json.dumps({k: state.get(k) for k in ("headline", "tone", "installed", "startup", "startupLabel")}
-                             | {"relics": (state.get("summary") or {}).get("relics")}))
+            print(shown(state))
+    elif command == "until":
+        s, status = connect(args[0], args[1])
+        assert status == 101, f"status {status}"
+        pattern, deadline = re.compile(args[2]), time.time() + float(args[3])
+        while time.time() < deadline:
+            try:
+                state = json.loads(receive(s))
+            except socket.timeout:
+                continue
+            if pattern.search((state.get("update") or {}).get("text") or ""):
+                print(shown(state))
+                return
+        sys.exit(f"no update line matching {args[2]!r} within {args[3]} s")
+    elif command == "events":
+        s, status = connect(args[0], args[1])
+        assert status == 101, f"status {status}"
+        deadline = time.time() + float(args[2])
+        s.settimeout(0.5)
+        while time.time() < deadline:
+            try:
+                message = json.loads(receive(s))
+            except socket.timeout:
+                continue
+            data = message.get("data")
+            relics = f":{len(data.get('relics', []))}" if isinstance(data, dict) and "relics" in data else ""
+            print(message.get("event") + relics, flush=True)
     else:
         sys.exit(f"unknown command {command}")
 

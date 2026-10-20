@@ -37,6 +37,7 @@ impl Decoder {
         let game = match ip_in_ethernet(&frame).map(|(_, ip)| transport(ip)) {
             // Only the server's side carries the account.
             Some(Transport::Tcp { src: EMULATOR_PORT, dst, seq, syn, payload }) => {
+                hub.game_seen();
                 let session = 0x8000_0000 | u32::from(dst);
                 for frame in self.tcp.entry(dst).or_default().push(seq, syn, payload) {
                     if let Ok(command) = GameCommand::try_new(frame) {
@@ -49,6 +50,7 @@ impl Decoder {
             None => false,
         };
         if game {
+            hub.game_seen();
             self.game(hub, frame);
         }
     }

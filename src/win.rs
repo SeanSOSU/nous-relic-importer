@@ -53,7 +53,7 @@ pub fn relaunch_elevated() -> bool {
 pub struct SingleInstance(HANDLE);
 
 impl SingleInstance {
-    const NAME: &str = "Local\\StarRailSimSync";
+    const NAME: &str = "Local\\NousRelicImporter";
 
     /// None when another copy is already running.
     pub fn acquire() -> Option<Self> {
@@ -87,8 +87,8 @@ impl Drop for SingleInstance {
 pub struct Signal(HANDLE);
 
 impl Signal {
-    pub const QUIT: &str = "Local\\StarRailSimSyncQuit";
-    pub const SHOW: &str = "Local\\StarRailSimSyncShow";
+    pub const QUIT: &str = "Local\\NousRelicImporterQuit";
+    pub const SHOW: &str = "Local\\NousRelicImporterShow";
 
     // The app runs elevated, and Windows keeps a normal-rights process from signalling an elevated one's
     // objects. This descriptor lets the signed-in user's own processes raise the signal (SYNCHRONIZE |
@@ -159,7 +159,7 @@ impl Drop for Signal {
     }
 }
 
-const UNINSTALL_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\StarRailSim Sync";
+const UNINSTALL_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\Nous Relic Importer";
 
 /// Lists the app under Settings > Apps > Installed apps, uninstalling through `--uninstall`.
 pub fn add_uninstall_entry(exe: &std::path::Path, install_dir: &std::path::Path) -> bool {
@@ -207,6 +207,20 @@ pub fn add_uninstall_entry(exe: &std::path::Path, install_dir: &std::path::Path)
         RegCloseKey(key);
         ok
     }
+}
+
+/// Whether Installed apps lists the app: an update refreshes the entry only where the install made one.
+pub fn has_uninstall_entry() -> bool {
+    use windows_sys::Win32::System::Registry::{HKEY, HKEY_CURRENT_USER, KEY_READ, RegCloseKey, RegOpenKeyExW};
+    let path = wide(UNINSTALL_KEY);
+    let mut key: HKEY = std::ptr::null_mut();
+    unsafe {
+        if RegOpenKeyExW(HKEY_CURRENT_USER, path.as_ptr(), 0, KEY_READ, &mut key) != 0 {
+            return false;
+        }
+        RegCloseKey(key);
+    }
+    true
 }
 
 pub fn remove_uninstall_entry() {

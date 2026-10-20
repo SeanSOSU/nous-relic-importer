@@ -1,8 +1,8 @@
 [workspace]
-members = ["core", "decoder"]
+members = ["core", "decoder", "tools/release"]
 
 [package]
-name = "starrailsim-sync"
+name = "nous-relic-importer"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
@@ -16,12 +16,16 @@ sync-core = { path = "core", features = ["stream"] }
 
 axum = { version = "0.8", features = ["ws"] }
 futures = "0.3"
+# Checks an update's signature against the release key built in (update-key.pub).
+minisign-verify = "0.2"
 open = "5"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net", "fs"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# The update check and download: rustls with its own root certificates, the ureq core's build script already uses.
+ureq = { version = "2.12.1", default-features = false, features = ["tls"] }
 
 [target.'cfg(windows)'.dependencies]
 pktmon = { version = "0.6.2", features = ["tokio"] }
@@ -43,6 +47,8 @@ ksni = "0.3.6"
 libc = "0.2"
 
 [dev-dependencies]
+# Signs test builds for the update tests, as tools/release does for real ones.
+minisign = "0.7"
 roxmltree = "0.20"
 
 [build-dependencies]

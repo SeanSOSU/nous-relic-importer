@@ -14,6 +14,7 @@ use super::tray::SyncTray;
 use super::{Action, Signal, install, web};
 use crate::hub::{Hub, Status};
 use crate::record::Recorder;
+use crate::update::Updater;
 use crate::view::{self, Setup};
 use crate::{PORT, capture, emulator, server};
 
@@ -41,33 +42,51 @@ fn open(target: &str) {
     }
 }
 
-/// The tray icon, kept current with the account and the startup setting. None where the desktop has no tray.
-async fn tray(hub: &Hub, setup: &watch::Receiver<Setup>, actions: mpsc::UnboundedSender<Action>) -> Option<ksni::Handle<SyncTray>> {
+/// The tray icon, kept current with the account, the startup setting and updates. None where the desktop has
+/// no tray.
+async fn tray(
+    hub: &Hub,
+    updater: &Updater,
+    setup: &watch::Receiver<Setup>,
+    actions: mpsc::UnboundedSender<Action>,
+) -> Option<ksni::Handle<SyncTray>> {
     let current = *setup.borrow();
-    let (headline, tone, _) = view::state(hub, &current);
+    let update = updater.state();
+    let (headline, tone, _) = view::state(hub, &current, &update);
+    let sending = *hub.sending().borrow();
+    let tray = SyncTray { headline, tone, setup: current, sending, update: view::update_item(&update), actions };
     // Started at login, the app can be up before the panel is: the icon then appears when the panel does.
-    let handle = match (SyncTray { headline, tone, setup: current, actions }).assume_sni_available(true).spawn().await {
+    let handle = match tray.assume_sni_available(true).spawn().await {
         Ok(handle) => handle,
         Err(e) => {
             warn!(%e, "no tray icon");
             return None;
         }
     };
-    let (updates, hub) = (handle.clone(), hub.clone());
-    let (mut status, mut clients, mut setup) = (hub.status(), hub.clients(), setup.clone());
+    let (icon, hub) = (handle.clone(), hub.clone());
+    let (mut status, mut clients, mut setup, mut updates) = (hub.status(), hub.clients(), setup.clone(), updater.subscribe());
+    let mut sending = hub.sending();
     tokio::spawn(async move {
         loop {
             let alive = tokio::select! {
                 r = status.changed() => r.is_ok(),
                 r = clients.changed() => r.is_ok(),
                 r = setup.changed() => r.is_ok(),
+                r = updates.changed() => r.is_ok(),
+                r = sending.changed() => r.is_ok(),
             };
             if !alive {
                 break;
             }
             let current = *setup.borrow_and_update();
-            let (headline, tone, _) = view::state(&hub, &current);
-            if updates.update(move |t: &mut SyncTray| (t.headline, t.tone, t.setup) = (headline, tone, current)).await.is_none() {
+            let update = updates.borrow_and_update().clone();
+            let on = *sending.borrow_and_update();
+            let (headline, tone, _) = view::state(&hub, &current, &update);
+            let item = view::update_item(&update);
+            let changed = icon.update(move |t: &mut SyncTray| {
+                (t.headline, t.tone, t.setup, t.sending, t.update) = (headline, tone, current, on, item);
+            });
+            if changed.await.is_none() {
                 break;
             }
         }
@@ -75,7 +94,7 @@ async fn tray(hub: &Hub, setup: &watch::Receiver<Setup>, actions: mpsc::Unbounde
     Some(handle)
 }
 
-pub fn run(hub: Hub, launch: Launch, work: Work, quit: Signal, show: Signal) {
+pub fn run(hub: Hub, updater: Updater, launch: Launch, work: Work, quit: Signal, show: Signal) {
     let runtime = tokio::runtime::Builder::new_multi_thread().worker_threads(2).enable_all().build().expect("tokio runtime");
     runtime.block_on(async move {
         let (actions_tx, mut actions) = mpsc::unbounded_channel();
@@ -97,7 +116,13 @@ pub fn run(hub: Hub, launch: Launch, work: Work, quit: Signal, show: Signal) {
 
         let (setup_tx, setup) =
             watch::channel(Setup { installed: install::running_installed(), startup: install::startup_registered() });
-        let window = web::Window { token: super::token().into(), hub: hub.clone(), setup: setup.clone(), actions: actions_tx.clone() };
+        let window = web::Window {
+            token: super::token().into(),
+            hub: hub.clone(),
+            setup: setup.clone(),
+            updater: updater.clone(),
+            actions: actions_tx.clone(),
+        };
 
         let server = tokio::spawn(server::serve(hub.clone(), PORT, launch.origins, Some(web::routes(window.clone()))));
         let failed = hub.clone();
@@ -121,7 +146,7 @@ pub fn run(hub: Hub, launch: Launch, work: Work, quit: Signal, show: Signal) {
             Work::Nothing => {}
         }
 
-        let tray = if launch.tray { tray(&hub, &setup, actions_tx.clone()).await } else { None };
+        let tray = if launch.tray { tray(&hub, &updater, &setup, actions_tx.clone()).await } else { None };
         if launch.show_window {
             actions_tx.send(Action::Show).ok();
         }
@@ -141,6 +166,8 @@ pub fn run(hub: Hub, launch: Launch, work: Work, quit: Signal, show: Signal) {
                     }
                     setup_tx.send_modify(|s| s.startup = install::startup_registered());
                 }
+                Action::Sending(on) => crate::settings::set_sending(&hub, on),
+                Action::Update(request) => updater.ask(request),
                 Action::Quit => break,
                 Action::Uninstall => {
                     if let Err(e) = install::uninstall() {
