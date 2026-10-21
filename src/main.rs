@@ -308,7 +308,7 @@ fn main() {
     }
 
     if options.first_run {
-        open_site();
+        open_site_unless_a_page_connects(&hub, options.site.clone());
     }
     if options.headless {
         return quit.wait();
@@ -319,6 +319,22 @@ fn main() {
         show_window: !options.background,
     };
     app::run(hub, updater, launch, quit, show);
+}
+
+/// The first run's page, unless one connects on its own within a few seconds: the guide the download came from
+/// waits for the app, and keeping that tab beats opening a second.
+fn open_site_unless_a_page_connects(hub: &hub::Hub, site: String) {
+    let clients = hub.clients();
+    std::thread::spawn(move || {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(6);
+        while std::time::Instant::now() < deadline {
+            if *clients.borrow() > 0 {
+                return tracing::info!("a page connected on its own; not opening another");
+            }
+            std::thread::sleep(std::time::Duration::from_millis(200));
+        }
+        open::that_detached(&site).ok();
+    });
 }
 
 /// The account is kept on disk between runs; a test against the emulator keeps its own file, and a replay none.
@@ -486,7 +502,7 @@ fn main() {
     let updater = update::start(update::Plan::new(options.update_feed.clone(), options.relaunch(), options.background), hub.clone());
 
     if options.first_run {
-        open_site();
+        open_site_unless_a_page_connects(&hub, options.site.clone());
     }
     let launch = Launch {
         site: options.site.clone(),
