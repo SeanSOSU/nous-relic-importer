@@ -314,4 +314,36 @@ mod tests {
         let held_after = wearers(&session.account()["light_cones"]);
         assert_eq!((&held_after[&c_id], &held_after[&d_id]), (&held_before[&d_id], &held_before[&c_id]));
     }
+
+    #[test]
+    fn relics_salvaged_and_light_cones_used_up_in_game_leave_open_pages() {
+        let mut session = Session::logged_in();
+        let (_, mut pages) = session.hub.subscribe();
+        let ids = |update: &Value| -> Vec<String> { update["data"].as_array().unwrap().iter().map(|v| v.as_str().unwrap().to_owned()).collect() };
+
+        // Salvaging: the server's update names the relics that are gone. (This recorded account wears every relic it
+        // has, so these come off a character first in game; the update is the same.)
+        let salvaged: Vec<u32> = session.bag.relic_list.iter().take(3).map(|r| r.unique_id).collect();
+        let mut sync = PlayerSyncScNotify::new();
+        sync.del_relic_list = salvaged.clone();
+        session.send(sync);
+        let update: Value = serde_json::from_str(&pages.try_recv().expect("the salvage reaches the page")).unwrap();
+        assert_eq!(update["event"], "DeleteRelics");
+        assert_eq!(ids(&update), salvaged.iter().map(u32::to_string).collect::<Vec<_>>());
+        // A page that opens now, and the saved account, no longer have them.
+        let left = wearers(&session.account()["relics"]);
+        assert_eq!(left.len(), 555);
+        assert!(salvaged.iter().all(|id| !left.contains_key(&id.to_string())));
+        assert!(matches!(*session.hub.status().borrow(), Status::Synced { relics: 555, fresh: true, .. }));
+
+        // A light cone fed to another as experience goes the same way.
+        let used = session.bag.equipment_list[0].unique_id;
+        let mut sync = PlayerSyncScNotify::new();
+        sync.del_equipment_list.push(used);
+        session.send(sync);
+        let update: Value = serde_json::from_str(&pages.try_recv().expect("the used light cone reaches the page")).unwrap();
+        assert_eq!(update["event"], "DeleteLightCones");
+        assert_eq!(ids(&update), [used.to_string()]);
+        assert!(!wearers(&session.account()["light_cones"]).contains_key(&used.to_string()));
+    }
 }
