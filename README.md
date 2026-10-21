@@ -20,8 +20,8 @@ StarRailSim's own pages may open that socket. The one connection the app makes i
 2. It installs itself to `%LOCALAPPDATA%\Programs\Nous Relic Importer`, adds a Start menu shortcut and an entry
    under Settings > Apps > Installed apps, registers to start when you sign in (a scheduled task with highest
    privileges, so there is no prompt at each sign-in), then opens its window and StarRailSim's Import page, which
-   connects to it. A browser that comes to the site another way connects with **Connect to the app** on that page,
-   once.
+   connects to it. **Open StarRailSim**, in the window or the tray menu, opens that page linked again in your
+   default browser; the site itself has no sync control.
 3. Start the game and click to start. The game only hands out its session key at login, so if you were
    already in game, log out and back in. From then on every change in game (a new relic, an upgrade, a new
    equip) reaches the site as it happens.
