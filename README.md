@@ -26,18 +26,19 @@ StarRailSim's own pages may open that socket. The one connection the app makes i
    already in game, log out and back in. From then on every change in game (a new relic, an upgrade, a new
    equip) reaches the site as it happens.
 
-**Send to StarRailSim**, in the window and the tray menu, is the one switch for the site: off, open pages keep what
+**Send to StarRailSim**, in Settings and the tray menu, is the one switch for the site: off, open pages keep what
 they have and say the app is paused; back on, they start over from the account as it is now. The account is still
 read and saved while it is off.
 
 The window says what it is doing and what to do next; closing it keeps sync running in the notification area.
+**Settings** (its button, or the tray menu) opens a window of its own with the switches, updates and **Uninstall**.
 The tray icon is grey while it waits for the game, teal once your account is synced, and amber when it needs
 you (log back in, or something stopped it). Left-click it, or use the Start menu shortcut, to bring the window
 back; neither asks for administrator access again.
 
 It updates itself (see [Updates](#updates)). Running a newer download by hand works too: it asks the running copy
-to quit and installs over it. Uninstall from Settings > Apps > Installed apps, or with **Uninstall** in the window:
-both remove the program, the sign-in task, the shortcut and the logs.
+to quit and installs over it. Uninstall from Settings > Apps > Installed apps, or with **Uninstall** in the app's
+Settings: both remove the program, the sign-in task, the shortcut and the logs.
 
 Logs: `%LOCALAPPDATA%\Nous Relic Importer\sync.log`.
 
@@ -57,7 +58,7 @@ then drops the capability. Its tray icon (KDE and the Steam Deck's desktop mode,
 AppIndicator extension Ubuntu ships) works like the Windows one. Its window is the same page, opened in your
 browser from the app itself at `http://127.0.0.1:23314/` with a token only the app hands out; starting the app
 again from the app menu opens it, tray or not. An update replaces the file, so installing one asks for the password
-again. Uninstall from the app menu entry's **Uninstall** action, or with **Uninstall** in the window.
+again. Uninstall from the app menu entry's **Uninstall** action, or with **Uninstall** in the app's Settings.
 
 On a Steam Deck the `deck` user has no password until you set one (`passwd` in Konsole), and the app runs in
 desktop mode only. Logs and the saved account: `~/.local/state/nous-relic-importer`.
@@ -73,8 +74,8 @@ refused. The verified file waits beside the installed copy, then takes over the 
 the running copy to quit, copies itself into place and starts. Start-at-sign-in stays as the reader left it.
 
 - **Windows** installs it by itself once the game has sent nothing for five minutes, so an update never cuts into a
-  game session. The window has **Install now**, and an **Install updates automatically** switch; turned off, the
-  update waits for **Install**.
+  game session. The window offers **Install now**, and Settings has an **Install updates automatically** switch;
+  turned off, the update waits for **Install**.
 - **Linux** downloads it by itself and waits for **Install** in the window or the tray, since the new file needs
   the password once more for its capture permission.
 - A copy run with `--portable` is never replaced: the window points at the new download instead.

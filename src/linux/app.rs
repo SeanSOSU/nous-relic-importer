@@ -153,6 +153,7 @@ pub fn run(hub: Hub, updater: Updater, launch: Launch, work: Work, quit: Signal,
         while let Some(action) = actions.recv().await {
             match action {
                 Action::Show => open(&window.address()),
+                Action::Settings => open(&format!("{}#settings", window.address())),
                 Action::OpenSite => open(&launch.site),
                 Action::ShowFile => {
                     if let Some(folder) = hub.cache_file().and_then(|f| f.parent()) {

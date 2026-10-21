@@ -1,6 +1,6 @@
-//! What the user sees: a notification-area icon that is always there, and a small window that opens on a
-//! manual launch or a click on the icon. The window is built when shown and torn down when closed, so the
-//! copy that starts at sign-in costs nothing until someone looks at it.
+//! What the user sees: a notification-area icon that is always there, a small window that opens on a manual
+//! launch or a click on the icon, and a settings window opened from either. Each window is built when shown and
+//! torn down when closed, so the copy that starts at sign-in costs nothing until someone looks at it.
 
 use tao::dpi::LogicalSize;
 use tao::event::{Event, StartCause, WindowEvent};
@@ -28,6 +28,36 @@ enum UserEvent {
     Quit,
 }
 
+/// The two windows, one page: the settings window is the same page told to show its settings view.
+#[derive(Clone, Copy, PartialEq)]
+enum View {
+    Main,
+    Settings,
+}
+
+impl View {
+    fn title(self) -> String {
+        match self {
+            View::Main => APP_NAME.to_owned(),
+            View::Settings => format!("{APP_NAME} settings"),
+        }
+    }
+
+    fn height(self) -> f64 {
+        match self {
+            View::Main => 540.0,
+            View::Settings => 300.0,
+        }
+    }
+
+    fn script(self) -> &'static str {
+        match self {
+            View::Main => "",
+            View::Settings => "window.NRI_VIEW = 'settings';",
+        }
+    }
+}
+
 pub struct Launch {
     pub site: String,
     /// What the sign-in task starts the installed copy with.
@@ -40,6 +70,7 @@ struct Tray {
     status: MenuItem,
     show: MenuItem,
     open: MenuItem,
+    settings: MenuItem,
     sending: CheckMenuItem,
     startup: CheckMenuItem,
     update: MenuItem,
@@ -56,6 +87,7 @@ impl Tray {
         let status = MenuItem::new("Starting…", false, None);
         let show = MenuItem::new("Show Nous Relic Importer", true, None);
         let open = MenuItem::new("Open StarRailSim", true, None);
+        let settings = MenuItem::new("Settings…", true, None);
         let sending = CheckMenuItem::new(view::SENDING.0, true, sending, None);
         let startup = CheckMenuItem::new("Start with Windows", installed, startup, None);
         let update = MenuItem::new("Check for updates", true, None);
@@ -66,6 +98,7 @@ impl Tray {
             &PredefinedMenuItem::separator(),
             &show,
             &open,
+            &settings,
             &PredefinedMenuItem::separator(),
             &sending,
             &startup,
@@ -82,7 +115,7 @@ impl Tray {
             .build()
             .map_err(|e| tracing::warn!(%e, "no tray icon"))
             .ok()?;
-        Some(Self { icon, status, show, open, sending, startup, update, update_request: Some(Request::Check), quit, tone: None })
+        Some(Self { icon, status, show, open, settings, sending, startup, update, update_request: Some(Request::Check), quit, tone: None })
     }
 
     fn update(&mut self, headline: &str, tone: Tone) {
@@ -100,10 +133,11 @@ fn open_window(
     target: &EventLoopWindowTarget<UserEvent>,
     context: &mut WebContext,
     proxy: &EventLoopProxy<UserEvent>,
+    view: View,
 ) -> Option<(Window, WebView)> {
     let window = WindowBuilder::new()
-        .with_title(APP_NAME)
-        .with_inner_size(LogicalSize::new(460.0, 660.0))
+        .with_title(view.title())
+        .with_inner_size(LogicalSize::new(460.0, view.height()))
         .with_resizable(false)
         .with_maximizable(false)
         .with_theme(Some(Theme::Dark))
@@ -113,6 +147,7 @@ fn open_window(
         .ok()?;
     let proxy = proxy.clone();
     let webview = WebViewBuilder::new_with_web_context(context)
+        .with_initialization_script(view.script())
         .with_html(UI)
         .with_background_color(PAGE)
         .with_ipc_handler(move |request| {
@@ -175,7 +210,7 @@ pub fn run(hub: Hub, updater: Updater, launch: Launch, quit: Signal, show_signal
     let installed = install::running_installed();
     let mut startup = install::startup_registered();
     let mut tray: Option<Tray> = None;
-    let mut window: Option<(Window, WebView)> = None;
+    let mut windows: Vec<(View, Window, WebView)> = Vec::new();
     let mut context = WebContext::new(Some(crate::data_dir().join("webview")));
 
     let account = hub.clone();
@@ -185,25 +220,27 @@ pub fn run(hub: Hub, updater: Updater, launch: Launch, quit: Signal, show_signal
     event_loop.run(move |event, target, control_flow| {
         *control_flow = ControlFlow::Wait;
         let mut refresh = false;
-        let mut show = false;
+        let mut show: Option<View> = None;
         match event {
             Event::NewEvents(StartCause::Init) => {
                 tray = Tray::new(*account.sending().borrow(), startup, installed);
                 refresh = true;
-                show = launch.show_window;
+                show = launch.show_window.then_some(View::Main);
             }
             Event::UserEvent(UserEvent::Changed) => refresh = true,
-            Event::UserEvent(UserEvent::Show) => show = true,
+            Event::UserEvent(UserEvent::Show) => show = Some(View::Main),
             Event::UserEvent(UserEvent::Tray(TrayIconEvent::Click {
                 button: MouseButton::Left,
                 button_state: MouseButtonState::Up,
                 ..
-            })) => show = true,
+            })) => show = Some(View::Main),
             Event::UserEvent(UserEvent::Tray(_)) => {}
             Event::UserEvent(UserEvent::Menu(event)) => {
                 let Some(t) = &tray else { return };
                 if event.id == *t.show.id() {
-                    show = true;
+                    show = Some(View::Main);
+                } else if event.id == *t.settings.id() {
+                    show = Some(View::Settings);
                 } else if event.id == *t.open.id() {
                     open::that_detached(&launch.site).ok();
                 } else if event.id == *t.sending.id() {
@@ -223,6 +260,7 @@ pub fn run(hub: Hub, updater: Updater, launch: Launch, quit: Signal, show_signal
             }
             Event::UserEvent(UserEvent::Ui(message)) => match message.as_str() {
                 "ready" => refresh = true,
+                "settings" => show = Some(View::Settings),
                 "open-site" => {
                     open::that_detached(&launch.site).ok();
                 }
@@ -258,18 +296,24 @@ pub fn run(hub: Hub, updater: Updater, launch: Launch, quit: Signal, show_signal
                 tray = None;
                 *control_flow = ControlFlow::Exit;
             }
-            Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => window = None,
+            Event::WindowEvent { window_id, event: WindowEvent::CloseRequested, .. } => {
+                windows.retain(|(_, w, _)| w.id() != window_id);
+            }
             _ => {}
         }
 
-        if show {
-            match &window {
-                Some((w, _)) => {
+        if let Some(view) = show {
+            match windows.iter().find(|(v, ..)| *v == view) {
+                Some((_, w, _)) => {
                     w.set_visible(true);
                     w.set_minimized(false);
                     w.set_focus();
                 }
-                None => window = open_window(target, &mut context, &proxy),
+                None => {
+                    if let Some((w, webview)) = open_window(target, &mut context, &proxy, view) {
+                        windows.push((view, w, webview));
+                    }
+                }
             }
         }
         if refresh {
@@ -283,7 +327,7 @@ pub fn run(hub: Hub, updater: Updater, launch: Launch, quit: Signal, show_signal
                 t.update.set_enabled(request.is_some());
                 t.update_request = request;
             }
-            if let Some((_, webview)) = &window {
+            for (_, _, webview) in &windows {
                 webview.evaluate_script(&format!("window.render && window.render({json})")).ok();
             }
         }

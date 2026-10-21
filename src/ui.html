@@ -30,6 +30,7 @@
     flex-direction: column;
     padding: 18px 28px 16px;
   }
+  .view { flex: 1; display: flex; flex-direction: column; }
 
   /* The picture at the top: radar rings around the mark while it waits, the account's faces once synced. */
   .hero { height: 132px; display: flex; align-items: center; justify-content: center; position: relative; }
@@ -56,7 +57,7 @@
     box-shadow: 0 2px 10px rgba(0, 0, 0, .45);
     animation: rise .5s ease-out both;
   }
-  .faces img:first-child { margin-left: 0; width: 72px; height: 72px; border-color: var(--ok); }
+  .faces img:first-child { margin-left: 0; }
   @keyframes rise { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
 
   .state { margin-top: 6px; display: flex; align-items: center; gap: 12px; }
@@ -77,6 +78,7 @@
   .sets img { width: 30px; height: 30px; object-fit: contain; }
 
   .detail { margin: 16px 0 0; color: var(--ink-2); }
+  .notice { margin: 10px 0 0; color: var(--ink-2); }
   .primary {
     margin-top: 16px; align-self: flex-start;
     font: inherit; font-weight: 600; color: #fff;
@@ -84,12 +86,13 @@
   }
   .primary:hover { filter: brightness(1.08); }
 
-  .settings { margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--line); }
+  .view h1 { margin: 2px 0 0; font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+  .settings { margin-top: 18px; }
   label.toggle { display: flex; align-items: center; gap: 10px; cursor: pointer; }
   label.toggle input { width: 16px; height: 16px; accent-color: var(--ok); margin: 0; }
   label.toggle[aria-disabled="true"] { cursor: default; color: var(--muted); }
   .hint { margin: 4px 0 0 26px; color: var(--muted); font-size: 12px; }
-  .setting + .setting { margin-top: 12px; }
+  .setting + .setting { margin-top: 16px; }
   .hint.flush { margin-left: 0; }
   .link { font: inherit; color: var(--ok); background: none; border: none; padding: 0; cursor: pointer; }
   .link:hover { text-decoration: underline; }
@@ -106,70 +109,89 @@
 </style>
 </head>
 <body>
-  <section class="hero" aria-hidden="true">
-    <div class="radar" id="radar"><span class="ring"></span><span class="ring"></span><span class="ring"></span><span class="core"></span></div>
-    <div class="faces" id="faces" hidden></div>
-  </section>
+  <div class="view" id="main-view">
+    <section class="hero" aria-hidden="true">
+      <div class="radar" id="radar"><span class="ring"></span><span class="ring"></span><span class="ring"></span><span class="core"></span></div>
+      <div class="faces" id="faces" hidden></div>
+    </section>
 
-  <div class="state" role="status">
-    <span class="dot" id="dot"><i id="ripple"></i></span>
-    <h2 id="headline">Starting…</h2>
+    <div class="state" role="status">
+      <span class="dot" id="dot"><i id="ripple"></i></span>
+      <h2 id="headline">Starting…</h2>
+    </div>
+    <p class="account" id="account"></p>
+    <div class="stats" id="stats" hidden>
+      <div><b id="n-relics"></b><span>relics</span></div>
+      <div><b id="n-cones"></b><span>light cones</span></div>
+      <div><b id="n-chars"></b><span>characters</span></div>
+    </div>
+    <div class="sets" id="sets" hidden></div>
+    <p class="detail" id="detail"></p>
+    <p class="notice" id="notice" hidden><span id="notice-text"></span> <button type="button" class="link" id="notice-action"></button></p>
+
+    <button class="primary" type="button" id="open">Open StarRailSim</button>
+
+    <footer>
+      <p>Closing this window keeps sync running in the background.</p>
+      <button type="button" id="open-settings">Settings</button>
+      <button type="button" id="quit">Quit</button>
+    </footer>
   </div>
-  <p class="account" id="account"></p>
-  <div class="stats" id="stats" hidden>
-    <div><b id="n-relics"></b><span>relics</span></div>
-    <div><b id="n-cones"></b><span>light cones</span></div>
-    <div><b id="n-chars"></b><span>characters</span></div>
+
+  <div class="view" id="settings-view" hidden>
+    <h1>Settings</h1>
+    <section class="settings">
+      <div class="setting">
+        <label class="toggle">
+          <input type="checkbox" id="sending">
+          <span id="sending-text">Send to StarRailSim</span>
+        </label>
+        <p class="hint" id="sending-hint"></p>
+      </div>
+      <div class="setting">
+        <label class="toggle" id="startup-label">
+          <input type="checkbox" id="startup">
+          <span id="startup-text">Start with Windows</span>
+        </label>
+        <p class="hint" id="startup-hint"></p>
+      </div>
+      <div class="setting" id="updates" hidden>
+        <label class="toggle" id="auto-label">
+          <input type="checkbox" id="auto">
+          <span>Install updates automatically</span>
+        </label>
+        <p class="hint" id="update-line"><span id="update-text"></span> <button type="button" class="link" id="update-action" hidden></button></p>
+      </div>
+    </section>
+
+    <footer>
+      <p>Nous Relic Importer <span id="version"></span></p>
+      <button type="button" id="saved-file" hidden>Saved file</button>
+      <button type="button" id="uninstall" hidden>Uninstall</button>
+    </footer>
   </div>
-  <div class="sets" id="sets" hidden></div>
-  <p class="detail" id="detail"></p>
-
-  <button class="primary" type="button" id="open">Open StarRailSim</button>
-
-  <section class="settings">
-    <div class="setting">
-      <label class="toggle">
-        <input type="checkbox" id="sending">
-        <span id="sending-text">Send to StarRailSim</span>
-      </label>
-      <p class="hint" id="sending-hint"></p>
-    </div>
-    <div class="setting">
-      <label class="toggle" id="startup-label">
-        <input type="checkbox" id="startup">
-        <span id="startup-text">Start with Windows</span>
-      </label>
-      <p class="hint" id="startup-hint"></p>
-    </div>
-    <div class="setting" id="updates" hidden>
-      <label class="toggle" id="auto-label">
-        <input type="checkbox" id="auto">
-        <span>Install updates automatically</span>
-      </label>
-      <p class="hint" id="update-line"><span id="update-text"></span> <button type="button" class="link" id="update-action" hidden></button></p>
-    </div>
-  </section>
-
-  <footer>
-    <p>Closing this window keeps sync running in the background. <span id="version"></span></p>
-    <button type="button" id="saved-file" hidden>Saved file</button>
-    <button type="button" id="uninstall" hidden>Uninstall</button>
-    <button type="button" id="quit">Quit</button>
-  </footer>
 
 <script>
   const $ = (id) => document.getElementById(id);
   const TONES = { ok: "#199e70", warn: "#d9a441", idle: "#8a8f98" };
 
+  // One page, two windows: the settings window is this page told to show its settings view.
+  const VIEW = window.NRI_VIEW || (location.hash === "#settings" ? "settings" : "main");
+  $("main-view").hidden = VIEW !== "main";
+  $("settings-view").hidden = VIEW !== "settings";
+  if (VIEW === "settings") document.title = "Settings · Nous Relic Importer";
+
   // In a browser (the Linux app opens its window there) the app's local socket stands in for the web view's
   // bridge. The page's own address carries the token the socket asks for.
   let updating = false;
+  let shown = null;
   if (!window.ipc && location.protocol === "http:") {
     const waiting = [];
     const socket = new WebSocket(`ws://${location.host}/ui${location.search}`);
     socket.onopen = () => waiting.splice(0).forEach((m) => socket.send(m));
     socket.onmessage = (e) => window.render(JSON.parse(e.data));
     socket.onclose = () => {
+      shown = null;
       $("headline").textContent = updating ? "Installing the update" : "Nous Relic Importer is not running";
       $("detail").textContent = updating
         ? "The new version opens its own window in a moment, once you have entered your password."
@@ -194,15 +216,22 @@
     return img;
   }
 
-  const stamp = (ms) => {
-    const d = new Date(ms);
-    const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    return d.toDateString() === new Date().toDateString() ? time : d.toLocaleDateString([], { month: "short", day: "numeric" }) + ", " + time;
+  // "5 minutes ago", kept true by drawing again every half minute; the exact time is the tooltip.
+  const stamp = (ms) => new Date(ms).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  const AGO = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+  const ago = (ms) => {
+    const seconds = (ms - Date.now()) / 1000;
+    for (const [unit, size] of [["day", 86400], ["hour", 3600], ["minute", 60]]) {
+      if (Math.abs(seconds) >= size) return AGO.format(Math.trunc(seconds / size), unit);
+    }
+    return "just now";
   };
-  const when = (ms, fresh) => (fresh ? "updated " : "saved ") + stamp(ms);
+  const when = (ms, fresh) => (fresh ? "last updated " : "saved ") + ago(ms);
+  setInterval(() => shown && window.render(shown), 30000);
 
   let drawn = { faces: "", sets: "", updatedAt: null };
   window.render = (s) => {
+    shown = s;
     const synced = s.summary && s.updatedAt;
     $("version").textContent = "v" + s.version;
     document.documentElement.style.setProperty("--tone", TONES[s.tone] || TONES.idle);
@@ -215,6 +244,7 @@
       s.summary && s.summary.trailblazer ? s.summary.trailblazer : null,
       s.updatedAt ? when(s.updatedAt, s.fresh) : null,
     ].filter(Boolean).join(" · ");
+    $("account").title = s.updatedAt ? stamp(s.updatedAt) : "";
 
     // A new import restarts the ripple, so each one is seen to land.
     if (s.live && drawn.updatedAt !== null && s.updatedAt !== drawn.updatedAt) {
@@ -270,24 +300,38 @@
 
     const u = s.update;
     $("updates").hidden = !u;
+    // A new version is the one update news the main window carries; checking and its settings live in Settings.
+    const news = u && (u.action === "install" || u.action === "download");
+    $("notice").hidden = !news;
     if (u) {
       $("auto-label").hidden = !u.canAuto;
       $("auto").checked = u.auto;
       $("update-line").classList.toggle("flush", !u.canAuto);
-      $("update-text").textContent = u.text + (u.checkedAt ? " Last checked " + stamp(u.checkedAt) + "." : "");
-      $("update-action").hidden = !u.action;
-      $("update-action").textContent = u.actionLabel || "";
-      $("update-action").dataset.action = u.action || "";
+      $("update-text").textContent = u.text + (u.checkedAt ? " Last checked " + ago(u.checkedAt) + "." : "");
+      $("update-text").title = u.checkedAt ? stamp(u.checkedAt) : "";
+      for (const id of ["update-action", "notice-action"]) {
+        $(id).hidden = !u.action;
+        $(id).textContent = u.actionLabel || "";
+        $(id).dataset.action = u.action || "";
+      }
+      $("notice-text").textContent = u.text;
       updating = u.installing;
     }
   };
 
   $("open").addEventListener("click", () => send("open-site"));
+  // In a browser (Linux) Settings is a small window of the browser's own; the app opens it everywhere else.
+  $("open-settings").addEventListener("click", () =>
+    location.protocol === "http:"
+      ? window.open(location.pathname + location.search + "#settings", "nri-settings", "popup,width=460,height=480")
+      : send("settings"));
   $("saved-file").addEventListener("click", () => send("show-file"));
   $("sending").addEventListener("change", (e) => send(e.target.checked ? "sending-on" : "sending-off"));
   $("startup").addEventListener("change", (e) => send(e.target.checked ? "startup-on" : "startup-off"));
   $("auto").addEventListener("change", (e) => send(e.target.checked ? "update-auto-on" : "update-auto-off"));
-  $("update-action").addEventListener("click", (e) => send("update-" + e.target.dataset.action));
+  for (const id of ["update-action", "notice-action"]) {
+    $(id).addEventListener("click", (e) => send("update-" + e.target.dataset.action));
+  }
   $("quit").addEventListener("click", () => send("quit"));
   $("uninstall").addEventListener("click", () => {
     if (confirm("Uninstall Nous Relic Importer? It stops syncing and removes itself from this computer.")) send("uninstall");

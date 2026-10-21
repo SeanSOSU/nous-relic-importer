@@ -65,6 +65,7 @@ impl ksni::Tray for SyncTray {
             MenuItem::Separator,
             item("Show Nous Relic Importer", || Action::Show),
             item("Open StarRailSim", || Action::OpenSite),
+            item("Settings…", || Action::Settings),
             MenuItem::Separator,
             CheckmarkItem {
                 label: view::SENDING.0.into(),

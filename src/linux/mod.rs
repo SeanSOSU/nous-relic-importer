@@ -9,6 +9,7 @@ mod web;
 /// What the tray menu, the window page and another copy's signals ask the running app to do.
 pub enum Action {
     Show,
+    Settings,
     OpenSite,
     ShowFile,
     /// The Send to StarRailSim switch.
