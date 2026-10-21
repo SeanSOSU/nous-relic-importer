@@ -4,9 +4,10 @@ Keeps [StarRailSim](https://starrailsim.com)'s relic inventory in step with your
 reads the game's own network traffic on your PC, so every relic, light cone and character comes in without an
 export file, and changes you make in game show up on the site as they happen.
 
-Windows and Linux (the Steam Deck included). **Download:** the
-[latest release](https://github.com/SeanSOSU/nous-relic-importer/releases/latest), `nous-relic-importer.exe` for
-Windows or `nous-relic-importer` for Linux.
+Windows and Linux (the Steam Deck included). **Download:**
+[for Windows](https://github.com/SeanSOSU/nous-relic-importer/releases/latest/download/nous-relic-importer.exe) or
+[for Linux and the Steam Deck](https://github.com/SeanSOSU/nous-relic-importer/releases/latest/download/nous-relic-importer),
+each the newest release's file.
 
 Your account never leaves your computer: the site connects to the app at `ws://127.0.0.1:23314/ws`, and only
 StarRailSim's own pages may open that socket. The one connection the app makes itself is its update check (see
