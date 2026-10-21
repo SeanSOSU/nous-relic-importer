@@ -45,7 +45,7 @@ impl View {
 
     fn height(self) -> f64 {
         match self {
-            View::Main => 540.0,
+            View::Main => 560.0,
             View::Settings => 300.0,
         }
     }

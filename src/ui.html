@@ -69,6 +69,8 @@
   @keyframes pulse { 0% { transform: scale(1); opacity: .7; } 100% { transform: scale(3); opacity: 0; } }
   .state h2 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
   .account { margin: 2px 0 0 24px; color: var(--muted); font-size: 13px; min-height: 20px; }
+  .updated { margin: 0 0 0 24px; color: var(--muted); font-size: 13px; }
+  .updated:empty { display: none; }
 
   .stats { display: flex; gap: 28px; margin: 16px 0 0 24px; }
   .stats b { display: block; font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -123,6 +125,7 @@
       <h2 id="headline">Starting…</h2>
     </div>
     <p class="account" id="account"></p>
+    <p class="updated" id="updated"></p>
     <div class="stats" id="stats" hidden>
       <div><b id="n-relics"></b><span>relics</span></div>
       <div><b id="n-cones"></b><span>light cones</span></div>
@@ -231,7 +234,7 @@
     }
     return "just now";
   };
-  const when = (ms, fresh) => (fresh ? "last updated " : "saved ") + ago(ms);
+  const when = (ms, fresh) => (fresh ? "Last updated " : "Saved ") + ago(ms);
   setInterval(() => shown && window.render(shown), 30000);
 
   let drawn = { faces: "", sets: "", updatedAt: null };
@@ -247,9 +250,9 @@
     $("account").textContent = [
       s.uid ? "UID " + s.uid : null,
       s.summary && s.summary.trailblazer ? s.summary.trailblazer : null,
-      s.updatedAt ? when(s.updatedAt, s.fresh) : null,
     ].filter(Boolean).join(" · ");
-    $("account").title = s.updatedAt ? stamp(s.updatedAt) : "";
+    $("updated").textContent = s.updatedAt ? when(s.updatedAt, s.fresh) : "";
+    $("updated").title = s.updatedAt ? stamp(s.updatedAt) : "";
 
     // A new import restarts the ripple, so each one is seen to land.
     if (s.live && drawn.updatedAt !== null && s.updatedAt !== drawn.updatedAt) {
