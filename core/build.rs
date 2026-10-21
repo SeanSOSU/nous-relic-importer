@@ -1,7 +1,7 @@
 // Downloads the game tables the exporter reads (relic sets, stats, names) so they are compiled in. Copied from
 // Reliquary Archiver's build.rs (MIT, https://github.com/IceDynamix/reliquary-archiver) without its Windows
 // resource block, which lives in the app's own build.rs; keep the downloads in step when
-// tools/update-exporter.ps1 reports that the archiver's build.rs changed.
+// tools/update-reliquary.ps1 reports that the archiver's build.rs changed.
 
 use std::collections::{HashMap, HashSet};
 use std::env;

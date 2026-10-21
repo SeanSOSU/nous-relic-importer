@@ -210,7 +210,11 @@ mod tests {
                 }
                 decoder.frame(&hub, frame.to_vec());
             }
-            assert!(matches!(*hub.status().borrow(), Status::Synced { relics: 558, fresh: true, .. }));
+            let status = hub.status().borrow().clone();
+            assert!(
+                matches!(status, Status::Synced { relics: 558, fresh: true, .. }),
+                "the recorded login came out as {status:?}: on a new protocol it needs a new emulator recording"
+            );
             let (template, seq) = end.unwrap();
             Session { hub, decoder, bag: bag.unwrap(), template, seq }
         }

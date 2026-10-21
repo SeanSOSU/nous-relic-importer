@@ -6,7 +6,7 @@ license = "MIT"
 description = "What the Nous Relic Importer app and its capture-file decoder share: the inventory exporter and the game-frame reader"
 
 [dependencies]
-# Keep this tag the same as the app's and the decoder's; tools/update-exporter.ps1 prints the one to use.
+# Keep this tag the same as the app's and the decoder's; tools/update-reliquary.ps1 sets all of them.
 reliquary = { git = "https://github.com/IceDynamix/reliquary", tag = "v24.0.0", features = ["proto-rqa"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

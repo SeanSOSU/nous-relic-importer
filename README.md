@@ -133,17 +133,28 @@ whole Linux path: a normal user's first run installs and is granted the capabili
 must both have the account; then it quits and uninstalls. The packet socket's own test needs CAP_NET_RAW:
 `cargo test -- --ignored` as root there.
 
-**Every game patch** changes the game's protocol. Once Reliquary Archiver has released for the patch:
+**Every game patch** changes the game's protocol, and a new client's traffic cannot be decoded until the app moves
+to it. Once [Reliquary](https://github.com/IceDynamix/reliquary) has tagged the new protocol:
 
-1. `.\tools\update-exporter.ps1 <archiver tag>` re-copies its exporter into `core/src/export` and prints the
-   `reliquary` tag that release builds on.
-2. Set that tag on every `reliquary` entry: `Cargo.toml`, `core/Cargo.toml` (dependency and
-   build-dependency) and `decoder/Cargo.toml`.
-3. If the script warns that the archiver's `build.rs` changed, mirror its downloads in `core/build.rs`.
-4. Raise `version` in `Cargo.toml`, `cargo test`, the release builds, and publish them (below). Installed copies
-   pick the new version up within six hours.
+1. `.\tools\update-reliquary.ps1` sets Reliquary's newest tag (or `-Reliquary <tag>`) on every `reliquary` entry:
+   `Cargo.toml`, `core/Cargo.toml` (dependency and build-dependency) and `decoder/Cargo.toml`, with Reliquary's own
+   `protobuf` version on the tests' one. It copies Reliquary Archiver's exporter into `core/src/export` again only
+   when the archiver has released a different one since `core/src/export/VENDORED`'s tag; most patches need none.
+2. If the script warns that the archiver's `build.rs` changed, mirror its downloads in `core/build.rs`.
+3. The tests that replay `decoder/tests/emulator-login.pcap` fail on a new protocol, saying it needs a new emulator
+   recording: record a PearlSR login on the new protocol (`--emulator --record`), put it in that file's place and set
+   the counts its tests expect.
+4. Raise `version` in `Cargo.toml`, `cargo test --workspace`, the release builds, and publish them (below).
+   Installed copies pick the new version up within six hours.
 
-Until then a new client's traffic cannot be decoded.
+`tools/patch-check.ps1` prepares this by itself. When Reliquary has a tag newer than the one `main` builds on, it
+makes a local branch, `reliquary-<tag>`, in a worktree beside the repo (`<repo>-patch`): step 1, the next patch
+version, then `cargo test --workspace` and the Windows `cargo build --release` there, committed whatever they say. It
+reports with a Windows notification and `target/patch-check/reliquary-<tag>.md`, and never pushes or publishes.
+`-DryRun` says what it would do. `-Register -Jobs 2 -Affinity FFFF0` makes it a weekly scheduled task for the
+signed-in user (Thursdays at 10:00, or as soon as it can after a missed one) whose cargo runs two jobs on the CPUs in
+that hex mask; `Start-ScheduledTask "Nous Relic Importer patch check"` runs it now. Each run adds a line to
+`target/patch-check/patch-check.log`.
 
 ### Publishing a release
 

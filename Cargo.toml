@@ -9,8 +9,8 @@ license = "MIT"
 description = "Keeps StarRailSim's relic inventory in step with your game account, read from the game's own network traffic"
 
 [dependencies]
-# The packet decoder. Its protobuf types change with every game version: on each patch, re-vendor the exporter
-# with tools/update-exporter.ps1 and set this tag (and core's, both entries) to the one it prints.
+# The packet decoder. Its protobuf types change with every game version: on each patch,
+# tools/update-reliquary.ps1 sets this tag, core's (both entries) and the decoder's to Reliquary's new one.
 reliquary = { git = "https://github.com/IceDynamix/reliquary", tag = "v24.0.0", features = ["proto-rqa"] }
 sync-core = { path = "core", features = ["stream"] }
 
@@ -49,7 +49,8 @@ libc = "0.2"
 [dev-dependencies]
 # Signs test builds for the update tests, as tools/release does for real ones.
 minisign = "0.7"
-# Writes the game messages the capture test sends after a recorded login; reliquary's own version.
+# Writes the game messages the capture test sends after a recorded login; reliquary's own version, which
+# tools/update-reliquary.ps1 copies.
 protobuf = "=3.7.1"
 roxmltree = "0.20"
 
