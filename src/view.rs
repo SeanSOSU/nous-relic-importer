@@ -109,11 +109,11 @@ pub struct Setup {
 }
 
 #[cfg(windows)]
-const STARTUP: (&str, &str) = ("Launch on startup", "Starts quietly at sign-in, before you open the game.");
+const STARTUP: (&str, &str) = ("Launch on startup", "Automatically runs on computer restart.");
 #[cfg(not(windows))]
-const STARTUP: (&str, &str) = ("Launch on startup", "Starts quietly at login, before you open the game.");
+const STARTUP: (&str, &str) = ("Launch on startup", "Automatically runs on computer restart.");
 
-pub const SENDING: (&str, &str) = ("Auto import", "Your account and each change go to StarRailSim as you play.");
+pub const SENDING: (&str, &str) = ("Auto import", "Automatically imports to StarRailSim and keeps your equipment in sync.");
 
 /// The window's update line: what is happening, and the one thing it offers to do.
 pub fn describe_update(state: &update::State) -> Value {

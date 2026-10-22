@@ -115,10 +115,9 @@
   label.toggle input:checked::after { transform: translateX(16px); background: #fff; }
   label.toggle input:disabled { opacity: .45; cursor: default; }
   label.toggle[aria-disabled="true"] { cursor: default; color: var(--muted); }
-  .hint { margin: 3px 52px 0 0; color: var(--muted); font-size: 12px; }
+  .hint { margin: 3px 0 0; color: var(--muted); font-size: 12px; }
   .setting { padding: 12px 0; }
   .setting + .setting { border-top: 1px solid var(--line); }
-  .hint.flush { margin-right: 0; }
   .link { font: inherit; color: var(--ok); background: none; border: none; padding: 0; cursor: pointer; }
   .link:hover { text-decoration: underline; }
 
@@ -349,7 +348,6 @@
     if (u) {
       $("auto-label").hidden = !u.canAuto;
       $("auto").checked = u.auto;
-      $("update-line").classList.toggle("flush", !u.canAuto);
       $("update-text").textContent = u.text + (u.checkedAt ? " Last checked " + ago(u.checkedAt) + "." : "");
       $("update-text").title = u.checkedAt ? stamp(u.checkedAt) : "";
       for (const id of ["update-action", "notice-action"]) {
