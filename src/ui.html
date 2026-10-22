@@ -18,7 +18,7 @@
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; }
-  html { background: radial-gradient(120% 60% at 50% -10%, rgba(25, 158, 112, 0.18), transparent 60%), var(--page); }
+  html { background: radial-gradient(130% 55% at 50% -12%, rgba(25, 158, 112, 0.16), transparent 62%), var(--page); }
   /* In a browser tab (Linux) the page keeps the window's width, centred. */
   body {
     max-width: 460px;
@@ -28,13 +28,15 @@
     user-select: none;
     display: flex;
     flex-direction: column;
-    padding: 18px 28px 16px;
+    padding: 16px 24px 12px;
   }
   .view { flex: 1; display: flex; flex-direction: column; }
+  /* One centred column, held in the middle of whatever height the state needs. */
+  .main { margin: auto 0; display: flex; flex-direction: column; align-items: center; text-align: center; }
 
   /* The picture at the top: radar rings around the mark while it waits, the account's faces once synced. */
-  .hero { height: 132px; display: flex; align-items: center; justify-content: center; position: relative; }
-  .radar { position: relative; width: 120px; height: 120px; display: grid; place-items: center; }
+  .hero { height: 112px; display: flex; align-items: center; justify-content: center; position: relative; }
+  .radar { position: relative; width: 112px; height: 112px; display: grid; place-items: center; }
   .radar .ring {
     position: absolute; inset: 30px; border-radius: 50%;
     border: 2px solid var(--tone, var(--idle)); opacity: 0;
@@ -50,56 +52,77 @@
   }
   .radar[data-still="true"] .ring { animation: none; opacity: 0; }
 
+  /* A row of pictures shows up together, once it has loaded, never one picture at a time (see reveal). */
   .faces { display: flex; justify-content: center; }
   .faces img {
-    width: 58px; height: 58px; border-radius: 50%; object-fit: cover;
-    background: #141c2e; border: 2px solid var(--page); margin-left: -12px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, .45);
-    animation: rise .5s ease-out both;
+    width: 54px; height: 54px; border-radius: 50%; object-fit: cover;
+    background: #141c2e; border: 2px solid var(--page); margin-left: -10px;
+    box-shadow: 0 3px 12px rgba(0, 0, 0, .5);
   }
   .faces img:first-child { margin-left: 0; }
-  @keyframes rise { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .faces:not(.ready) img, .sets:not(.ready) figure { opacity: 0; }
+  .faces.ready img, .sets.ready figure { animation: rise .45s ease-out both; }
+  @keyframes rise { from { transform: translateY(6px); opacity: 0; } to { transform: none; opacity: 1; } }
 
-  .state { margin-top: 6px; display: flex; align-items: center; gap: 12px; }
-  .dot { position: relative; flex: none; width: 12px; height: 12px; border-radius: 50%; background: var(--idle); }
+  .state { margin-top: 10px; display: flex; align-items: center; justify-content: center; gap: 10px; }
+  .dot { position: relative; flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--idle); }
   .dot[data-tone="ok"] { background: var(--ok); }
   .dot[data-tone="warn"] { background: var(--warn); }
   .dot i { position: absolute; inset: 0; border-radius: 50%; background: inherit; opacity: 0; }
   .dot[data-live="true"] i { animation: pulse 2s ease-out infinite; }
   @keyframes pulse { 0% { transform: scale(1); opacity: .7; } 100% { transform: scale(3); opacity: 0; } }
-  .state h2 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
-  .account { margin: 2px 0 0 24px; color: var(--muted); font-size: 13px; min-height: 20px; }
-  .updated { margin: 0 0 0 24px; color: var(--muted); font-size: 13px; }
-  .updated:empty { display: none; }
+  .state h2 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.015em; }
+  .main:has(#radar:not([hidden])) .dot { display: none; }  /* the radar already shows the state */
+  /* Who and when, on one line under the headline. */
+  .meta { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+  .meta:has(span:empty + span:empty) { display: none; }
+  #account:not(:empty) + #updated:not(:empty)::before { content: "\00b7"; margin: 0 7px; }
 
-  .stats { display: flex; gap: 28px; margin: 16px 0 0 24px; }
-  .stats b { display: block; font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .stats { display: flex; width: 100%; margin: 20px 0 0; padding: 14px 0; border-block: 1px solid var(--line); }
+  .stats div { flex: 1; display: flex; flex-direction: column; align-items: center; }
+  .stats div + div { border-left: 1px solid var(--line); }
+  .stats b { font-size: 22px; font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums; }
   .stats span { color: var(--muted); font-size: 12px; }
-  .sets { display: flex; gap: 14px; margin: 14px 0 0 24px; }
-  .sets figure { margin: 0; display: flex; align-items: center; gap: 6px; color: var(--ink-2); font-size: 13px; }
-  .sets img { width: 30px; height: 30px; object-fit: contain; }
+  .sets { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; margin: 16px 0 0; }
+  .sets::before { content: "Top relic sets"; flex-basis: 100%; color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+  .sets figure { margin: 0; display: flex; align-items: center; gap: 6px; color: var(--ink-2); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .sets img { width: 34px; height: 34px; object-fit: contain; }
 
-  .detail { margin: 16px 0 0; color: var(--ink-2); }
-  .notice { margin: 10px 0 0; color: var(--ink-2); }
+  .detail { margin: 16px 0 0; max-width: 360px; color: var(--ink-2); }
+  .detail:empty { display: none; }
+  .notice { margin: 10px 0 0; max-width: 360px; color: var(--ink-2); }
   .primary {
-    margin-top: 16px; align-self: flex-start;
+    margin-top: 18px; min-width: 210px;
     font: inherit; font-weight: 600; color: #fff;
-    background: var(--btn); border: none; border-radius: 8px; padding: 9px 18px; cursor: pointer;
+    background: var(--btn); border: none; border-radius: 10px; padding: 10px 22px; cursor: pointer;
+    box-shadow: 0 4px 16px rgba(25, 158, 112, .25);
   }
   .primary:hover { filter: brightness(1.08); }
 
-  .view h1 { margin: 2px 0 0; font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
-  .settings { margin-top: 18px; }
-  label.toggle { display: flex; align-items: center; gap: 10px; cursor: pointer; }
-  label.toggle input { width: 16px; height: 16px; accent-color: var(--ok); margin: 0; }
+  .view h1 { margin: 4px 0 0; font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+  .settings { margin-top: 14px; }
+  /* A switch on the right of its label, the hint under both. */
+  label.toggle { display: flex; flex-direction: row-reverse; justify-content: space-between; align-items: center; gap: 16px; cursor: pointer; font-weight: 500; }
+  label.toggle input {
+    appearance: none; flex: none; position: relative; margin: 0; width: 36px; height: 20px; border-radius: 999px;
+    background: #2a3550; cursor: pointer; transition: background .15s;
+  }
+  label.toggle input::after {
+    content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%;
+    background: #c3cde2; transition: transform .15s, background .15s;
+  }
+  label.toggle input:checked { background: var(--ok); }
+  label.toggle input:checked::after { transform: translateX(16px); background: #fff; }
+  label.toggle input:disabled { opacity: .45; cursor: default; }
   label.toggle[aria-disabled="true"] { cursor: default; color: var(--muted); }
-  .hint { margin: 4px 0 0 26px; color: var(--muted); font-size: 12px; }
-  .setting + .setting { margin-top: 16px; }
-  .hint.flush { margin-left: 0; }
+  .hint { margin: 3px 52px 0 0; color: var(--muted); font-size: 12px; }
+  .setting { padding: 12px 0; }
+  .setting + .setting { border-top: 1px solid var(--line); }
+  .hint.flush { margin-right: 0; }
   .link { font: inherit; color: var(--ok); background: none; border: none; padding: 0; cursor: pointer; }
   .link:hover { text-decoration: underline; }
 
-  footer { margin-top: auto; padding-top: 12px; display: flex; align-items: center; gap: 14px; color: var(--muted); font-size: 12px; }
+  footer { margin-top: auto; padding-top: 10px; border-top: 1px solid var(--line); display: flex; align-items: center; gap: 14px; color: var(--muted); font-size: 12px; }
   footer p { margin: 0; flex: 1; }
   footer button { font: inherit; color: var(--ink-2); background: none; border: none; padding: 0; cursor: pointer; }
   footer button:hover { color: var(--ink); text-decoration: underline; }
@@ -109,33 +132,34 @@
   [hidden] { display: none !important; }
 
   @media (prefers-reduced-motion: reduce) {
-    .radar .ring, .dot i, .faces img { animation: none !important; }
+    .radar .ring, .dot i, .faces img, .sets figure { animation: none !important; }
   }
 </style>
 </head>
 <body>
   <div class="view" id="main-view">
-    <section class="hero" aria-hidden="true">
-      <div class="radar" id="radar"><span class="ring"></span><span class="ring"></span><span class="ring"></span><span class="core"></span></div>
-      <div class="faces" id="faces" hidden></div>
-    </section>
+    <div class="main">
+      <section class="hero" aria-hidden="true">
+        <div class="radar" id="radar"><span class="ring"></span><span class="ring"></span><span class="ring"></span><span class="core"></span></div>
+        <div class="faces" id="faces" hidden></div>
+      </section>
 
-    <div class="state" role="status">
-      <span class="dot" id="dot"><i id="ripple"></i></span>
-      <h2 id="headline">Starting…</h2>
-    </div>
-    <p class="account" id="account"></p>
-    <p class="updated" id="updated"></p>
-    <div class="stats" id="stats" hidden>
-      <div><b id="n-relics"></b><span>relics</span></div>
-      <div><b id="n-cones"></b><span>light cones</span></div>
-      <div><b id="n-chars"></b><span>characters</span></div>
-    </div>
-    <div class="sets" id="sets" hidden></div>
-    <p class="detail" id="detail"></p>
-    <p class="notice" id="notice" hidden><span id="notice-text"></span> <button type="button" class="link" id="notice-action"></button></p>
+      <div class="state" role="status">
+        <span class="dot" id="dot"><i id="ripple"></i></span>
+        <h2 id="headline">Starting…</h2>
+      </div>
+      <p class="meta"><span id="account"></span><span id="updated"></span></p>
+      <div class="stats" id="stats" hidden>
+        <div><b id="n-relics"></b><span>relics</span></div>
+        <div><b id="n-cones"></b><span>light cones</span></div>
+        <div><b id="n-chars"></b><span>characters</span></div>
+      </div>
+      <div class="sets" id="sets" hidden></div>
+      <p class="detail" id="detail"></p>
+      <p class="notice" id="notice" hidden><span id="notice-text"></span> <button type="button" class="link" id="notice-action"></button></p>
 
-    <button class="primary" type="button" id="open">Open StarRailSim</button>
+      <button class="primary" type="button" id="open">Open StarRailSim</button>
+    </div>
 
     <footer>
       <button type="button" class="icon" id="open-settings" title="Settings" aria-label="Settings">
@@ -223,6 +247,14 @@
     img.src = ART[0] + path;
     return img;
   }
+  // Shows a row once all its pictures have loaded (a cold CDN can take seconds each), never one picture at a time;
+  // after 5 s it shows whatever has.
+  function reveal(row) {
+    row.classList.remove("ready");
+    const show = () => row.classList.add("ready");
+    Promise.all([...row.querySelectorAll("img")].map((img) => img.decode().catch(() => {}))).then(show);
+    setTimeout(show, 5000);
+  }
 
   // "5 minutes ago", kept true by drawing again every half minute; the exact time is the tooltip.
   const stamp = (ms) => new Date(ms).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
@@ -276,18 +308,21 @@
       if (faces !== drawn.faces) {
         $("faces").replaceChildren(...sm.featured.map((id, i) => {
           const img = art("icon/character/" + id + ".png");
-          img.style.animationDelay = i * 60 + "ms";
+          img.style.animationDelay = i * 50 + "ms";
           return img;
         }));
+        reveal($("faces"));
         drawn.faces = faces;
       }
       const sets = sm.topSets.map(([id, n]) => id + ":" + n).join(",");
       if (sets !== drawn.sets) {
-        $("sets").replaceChildren(...sm.topSets.map(([id, n]) => {
+        $("sets").replaceChildren(...sm.topSets.map(([id, n], i) => {
           const figure = document.createElement("figure");
+          figure.style.animationDelay = 200 + i * 50 + "ms";
           figure.append(art("icon/relic/" + id + ".png"), "×" + n);
           return figure;
         }));
+        reveal($("sets"));
         drawn.sets = sets;
       }
     }
