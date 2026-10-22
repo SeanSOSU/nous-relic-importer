@@ -26,7 +26,7 @@ StarRailSim's own pages may open that socket. The one connection the app makes i
    already in game, log out and back in. From then on every change in game (a new relic, an upgrade, a new
    equip) reaches the site as it happens.
 
-**Send to StarRailSim**, in Settings and the tray menu, is the one switch for the site: off, open pages keep what
+**Auto import**, in Settings and the tray menu, is the one switch for the site: off, open pages keep what
 they have and say the app is paused; back on, they start over from the account as it is now. The account is still
 read and saved while it is off.
 
@@ -52,7 +52,7 @@ One file, `nous-relic-importer`, a static x86_64 build that runs on any distribu
    login autostart, then asks for your password once, through the desktop's own prompt (polkit), to give the
    installed copy one capability: CAP_NET_RAW, for reading packets. It opens StarRailSim's Import page, which
    connects to it.
-3. Start the game and click to start, as on Windows. **Send to StarRailSim** works the same way too.
+3. Start the game and click to start, as on Windows. **Auto import** works the same way too.
 
 The capability stays on the file, so later starts ask nothing; the app opens its packet socket first thing,
 then drops the capability. Its tray icon (KDE and the Steam Deck's desktop mode, or GNOME with the

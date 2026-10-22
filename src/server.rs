@@ -15,7 +15,7 @@ use tracing::{info, warn};
 
 use crate::hub::{Frame, Hub};
 
-/// What a page gets while the reader has Send to StarRailSim off: it keeps what it has, and says so.
+/// What a page gets while the reader has Auto import off: it keeps what it has, and says so.
 const PAUSED: &str = r#"{"event":"Paused","data":null}"#;
 
 const SITE_ORIGINS: [&str; 4] = [

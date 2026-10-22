@@ -44,7 +44,7 @@ pub fn thousands(n: usize) -> String {
 }
 
 /// The one place the app words its state: the window's headline and next step, the tray's tooltip and colour.
-/// `sending`: the Send to StarRailSim switch.
+/// `sending`: the Auto import switch.
 pub fn describe(status: &Status, clients: usize, sending: bool) -> (String, String, Tone) {
     let (headline, detail, tone): (String, &str, Tone) = match status {
         Status::Starting => ("Starting…".into(), "", Tone::Idle),
@@ -73,7 +73,7 @@ pub fn describe(status: &Status, clients: usize, sending: bool) -> (String, Stri
         Status::Synced { relics, fresh: true, .. } => (
             format!("Synced {} relics", thousands(*relics)),
             if !sending {
-                "Send to StarRailSim is off, so the site keeps what it last got. Changes in game are still saved here."
+                "Auto import is off, so the site keeps what it last got. Changes in game are still saved here."
             } else if clients == 0 {
                 "Open StarRailSim to load them."
             } else {
@@ -109,11 +109,11 @@ pub struct Setup {
 }
 
 #[cfg(windows)]
-const STARTUP: (&str, &str) = ("Start with Windows", "Starts quietly at sign-in, before you open the game.");
+const STARTUP: (&str, &str) = ("Launch on startup", "Starts quietly at sign-in, before you open the game.");
 #[cfg(not(windows))]
-const STARTUP: (&str, &str) = ("Start when you log in", "Starts quietly at login, before you open the game.");
+const STARTUP: (&str, &str) = ("Launch on startup", "Starts quietly at login, before you open the game.");
 
-pub const SENDING: (&str, &str) = ("Send to StarRailSim", "Your account and each change go to StarRailSim as you play.");
+pub const SENDING: (&str, &str) = ("Auto import", "Your account and each change go to StarRailSim as you play.");
 
 /// The window's update line: what is happening, and the one thing it offers to do.
 pub fn describe_update(state: &update::State) -> Value {

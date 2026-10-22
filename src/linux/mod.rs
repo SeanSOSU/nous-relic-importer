@@ -12,7 +12,7 @@ pub enum Action {
     Settings,
     OpenSite,
     ShowFile,
-    /// The Send to StarRailSim switch.
+    /// The Auto import switch.
     Sending(bool),
     Startup(bool),
     Update(crate::update::Request),

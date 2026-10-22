@@ -89,7 +89,7 @@ pub struct Hub {
 struct Inner {
     status: watch::Sender<Status>,
     clients: watch::Sender<usize>,
-    /// Whether pages get the account: the reader's Send to StarRailSim switch.
+    /// Whether pages get the account: the reader's Auto import switch.
     sending: watch::Sender<bool>,
     frames: broadcast::Sender<Frame>,
     // The current account as one InitialScan frame. Held under the same lock a subscriber takes, so a page

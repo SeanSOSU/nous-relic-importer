@@ -27,12 +27,12 @@ pub const INSTALL_UPDATES: &str = "installUpdates";
 /// Send the account to StarRailSim pages; off pauses them where they are.
 const SEND_TO_SITE: &str = "sendToSite";
 
-/// The Send to StarRailSim switch as the last run left it.
+/// The Auto import switch as the last run left it.
 pub fn sending() -> bool {
     get(SEND_TO_SITE, true)
 }
 
-/// Flips Send to StarRailSim: open pages hear at once, and the next start keeps it.
+/// Flips Auto import: open pages hear at once, and the next start keeps it.
 pub fn set_sending(hub: &crate::hub::Hub, on: bool) {
     hub.set_sending(on);
     set(SEND_TO_SITE, on);

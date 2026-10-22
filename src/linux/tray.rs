@@ -15,7 +15,7 @@ pub struct SyncTray {
     pub headline: String,
     pub tone: Tone,
     pub setup: Setup,
-    /// The Send to StarRailSim switch.
+    /// The Auto import switch.
     pub sending: bool,
     /// The update item's label and what a click asks for, as `view::update_item` words it.
     pub update: (String, Option<Request>),
@@ -77,7 +77,7 @@ impl ksni::Tray for SyncTray {
             }
             .into(),
             CheckmarkItem {
-                label: "Start when you log in".into(),
+                label: "Launch on startup".into(),
                 enabled: self.setup.installed,
                 checked: self.setup.startup,
                 activate: Box::new(|tray: &mut Self| {

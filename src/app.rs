@@ -89,7 +89,7 @@ impl Tray {
         let open = MenuItem::new("Open StarRailSim", true, None);
         let settings = MenuItem::new("Settings…", true, None);
         let sending = CheckMenuItem::new(view::SENDING.0, true, sending, None);
-        let startup = CheckMenuItem::new("Start with Windows", installed, startup, None);
+        let startup = CheckMenuItem::new("Launch on startup", installed, startup, None);
         let update = MenuItem::new("Check for updates", true, None);
         let quit = MenuItem::new("Quit", true, None);
         let menu = Menu::new();
@@ -337,6 +337,6 @@ pub fn run(hub: Hub, updater: Updater, launch: Launch, quit: Signal, show_signal
 fn set_startup(on: bool, task_args: &str) {
     let result = if on { install::register_startup(task_args) } else { install::unregister_startup() };
     if let Err(e) = result {
-        tracing::warn!(%e, on, "could not change start with Windows");
+        tracing::warn!(%e, on, "could not change launch on startup");
     }
 }
