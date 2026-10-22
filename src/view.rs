@@ -4,6 +4,7 @@
 use serde_json::{Value, json};
 
 use crate::hub::{Hub, Status};
+use crate::i18n::{self, t, tf};
 use crate::update::{self, Request, Step};
 
 #[derive(Clone, Copy, PartialEq)]
@@ -46,32 +47,33 @@ pub fn thousands(n: usize) -> String {
 /// The one place the app words its state: the window's headline and next step, the tray's tooltip and colour.
 /// `sending`: the Auto import switch.
 pub fn describe(status: &Status, clients: usize, sending: bool) -> (String, String, Tone) {
-    let (headline, detail, tone): (String, &str, Tone) = match status {
-        Status::Starting => ("Starting…".into(), "", Tone::Idle),
+    let synced = |relics: usize| tf("Synced {n} relics", &[("n", &thousands(relics))]);
+    let (headline, detail, tone): (String, &'static str, Tone) = match status {
+        Status::Starting => (t("Starting…").into(), "", Tone::Idle),
         Status::Failed(why) => {
-            let logs = crate::data_dir();
-            let detail = format!("{why}. Quit and start it again; if it keeps happening, the log is in {}.", logs.display());
-            return ("Not working".into(), detail, Tone::Warn);
+            let logs = crate::data_dir().display().to_string();
+            let detail = tf("{why}. Quit and start it again; if it keeps happening, the log is in {logs}.", &[("why", why), ("logs", &logs)]);
+            return (t("Not working").into(), detail, Tone::Warn);
         }
         Status::WaitingForGame => (
-            "Waiting for the game".into(),
+            t("Waiting for the game").into(),
             "Start Honkai: Star Rail and click to start. If you are already in game, log out and back in.",
             Tone::Idle,
         ),
-        Status::GameFound => ("Game found".into(), "Log in and your account loads here.", Tone::Idle),
-        Status::LoggingIn => ("Loading your account…".into(), "", Tone::Idle),
+        Status::GameFound => (t("Game found").into(), "Log in and your account loads here.", Tone::Idle),
+        Status::LoggingIn => (t("Loading your account…").into(), "", Tone::Idle),
         Status::NeedsRelogin => (
-            "Log out and back in".into(),
+            t("Log out and back in").into(),
             "The game was already running when sync started, so it missed the login. Log out to the start screen and back in. If the game just updated, this app may need an update too.",
             Tone::Warn,
         ),
         Status::Synced { relics, fresh: false, .. } => (
-            format!("Synced {} relics", thousands(*relics)),
+            synced(*relics),
             "Saved from your last session. Start the game and log in to bring it up to date.",
             Tone::Ok,
         ),
         Status::Synced { relics, fresh: true, .. } => (
-            format!("Synced {} relics", thousands(*relics)),
+            synced(*relics),
             if !sending {
                 "Auto import is off, so the site keeps what it last got. Changes in game are still saved here."
             } else if clients == 0 {
@@ -82,7 +84,7 @@ pub fn describe(status: &Status, clients: usize, sending: bool) -> (String, Stri
             Tone::Ok,
         ),
     };
-    (headline, detail.to_owned(), tone)
+    (headline, t(detail).to_owned(), tone)
 }
 
 /// A filled disc with a white centre and soft edges, as RGBA.
@@ -108,39 +110,37 @@ pub struct Setup {
     pub startup: bool,
 }
 
-#[cfg(windows)]
-const STARTUP: (&str, &str) = ("Launch on startup", "Automatically runs on computer restart.");
-#[cfg(not(windows))]
-const STARTUP: (&str, &str) = ("Launch on startup", "Automatically runs on computer restart.");
+pub const STARTUP: (&str, &str) = ("Launch on startup", "Automatically runs on computer restart.");
 
 pub const SENDING: (&str, &str) = ("Auto import", "Automatically imports to StarRailSim and keeps your equipment in sync.");
 
 /// The window's update line: what is happening, and the one thing it offers to do.
 pub fn describe_update(state: &update::State) -> Value {
+    let v = |text: &'static str, version: &str| tf(text, &[("version", version)]);
     let (text, action) = match &state.step {
         Step::Off => return Value::Null,
-        Step::Waiting => ("Checks for a new version shortly.".to_owned(), Some(("check", "Check now"))),
-        Step::Checking => ("Checking for a new version…".to_owned(), None),
-        Step::Current { .. } => ("Up to date.".to_owned(), Some(("check", "Check now"))),
-        Step::Downloading { version } => (format!("Downloading version {version}…"), None),
+        Step::Waiting => (t("Checks for a new version shortly.").to_owned(), Some(("check", "Check now"))),
+        Step::Checking => (t("Checking for a new version…").to_owned(), None),
+        Step::Current { .. } => (t("Up to date.").to_owned(), Some(("check", "Check now"))),
+        Step::Downloading { version } => (v("Downloading version {version}…", version), None),
         Step::Ready { version } if state.auto => (
-            format!("Version {version} is ready. It installs by itself once the game has been closed for a few minutes."),
+            v("Version {version} is ready. It installs by itself once the game has been closed for a few minutes.", version),
             Some(("install", "Install now")),
         ),
-        Step::Ready { version } if cfg!(windows) => (format!("Version {version} is ready to install."), Some(("install", "Install"))),
+        Step::Ready { version } if cfg!(windows) => (v("Version {version} is ready to install.", version), Some(("install", "Install"))),
         Step::Ready { version } => (
-            format!("Version {version} is ready. Installing it asks for your password, as the first install did."),
+            v("Version {version} is ready. Installing it asks for your password, as the first install did.", version),
             Some(("install", "Install")),
         ),
-        Step::Available { version } => (format!("Version {version} is out."), Some(("download", "Download"))),
-        Step::Installing { version } => (format!("Installing version {version}…"), None),
-        Step::Failed { why } => (format!("Could not update: {why}."), Some(("check", "Try again"))),
+        Step::Available { version } => (v("Version {version} is out.", version), Some(("download", "Download"))),
+        Step::Installing { version } => (v("Installing version {version}…", version), None),
+        Step::Failed { why } => (tf("Could not update: {why}.", &[("why", why)]), Some(("check", "Try again"))),
     };
     json!({
         "text": text,
         "checkedAt": match state.step { Step::Current { at } => Some(at), _ => None },
         "action": action.map(|a| a.0),
-        "actionLabel": action.map(|a| a.1),
+        "actionLabel": action.map(|a| t(a.1)),
         "auto": state.auto,
         "canAuto": state.can_auto,
         "installing": matches!(state.step, Step::Installing { .. }),
@@ -149,14 +149,15 @@ pub fn describe_update(state: &update::State) -> Value {
 
 /// The tray menu's update item: its label, and what a click asks for (None greys it out).
 pub fn update_item(state: &update::State) -> (String, Option<Request>) {
+    let v = |text: &'static str, version: &str| tf(text, &[("version", version)]);
     match &state.step {
-        Step::Off => ("Updates are off".into(), None),
-        Step::Checking => ("Checking for updates…".into(), None),
-        Step::Downloading { version } => (format!("Downloading version {version}…"), None),
-        Step::Installing { version } => (format!("Installing version {version}…"), None),
-        Step::Ready { version } => (format!("Install version {version}"), Some(Request::Install)),
-        Step::Available { version } => (format!("Download version {version}"), Some(Request::Download)),
-        Step::Waiting | Step::Current { .. } | Step::Failed { .. } => ("Check for updates".into(), Some(Request::Check)),
+        Step::Off => (t("Updates are off").into(), None),
+        Step::Checking => (t("Checking for updates…").into(), None),
+        Step::Downloading { version } => (v("Downloading version {version}…", version), None),
+        Step::Installing { version } => (v("Installing version {version}…", version), None),
+        Step::Ready { version } => (v("Install version {version}", version), Some(Request::Install)),
+        Step::Available { version } => (v("Download version {version}", version), Some(Request::Download)),
+        Step::Waiting | Step::Current { .. } | Step::Failed { .. } => (t("Check for updates").into(), Some(Request::Check)),
     }
 }
 
@@ -183,13 +184,18 @@ pub fn state(hub: &Hub, setup: &Setup, update: &update::State) -> (String, Tone,
         "summary": hub.summary(),
         "savedFile": hub.cache_file().map(|p| p.display().to_string()),
         "sending": sending,
-        "sendingLabel": SENDING.0,
-        "sendingHint": SENDING.1,
+        "sendingLabel": t(SENDING.0),
+        "sendingHint": t(SENDING.1),
         "startup": setup.startup,
-        "startupLabel": STARTUP.0,
-        "startupHint": STARTUP.1,
+        "startupLabel": t(STARTUP.0),
+        "startupHint": t(STARTUP.1),
         "installed": setup.installed,
         "update": describe_update(update),
+        // The page's own words and the language picker: what is shown, what was picked, what Automatic means here.
+        "lang": i18n::current().code(),
+        "language": i18n::choice(),
+        "systemLanguage": i18n::system().name(),
+        "strings": i18n::page_strings(),
     });
     (headline, tone, json)
 }

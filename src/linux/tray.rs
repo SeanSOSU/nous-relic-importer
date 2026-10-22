@@ -8,6 +8,7 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use super::Action;
 use crate::APP_NAME;
+use crate::i18n::t;
 use crate::update::Request;
 use crate::view::{self, Setup, Tone, disc};
 
@@ -63,12 +64,12 @@ impl ksni::Tray for SyncTray {
         vec![
             StandardItem { label: self.headline.clone(), enabled: false, ..Default::default() }.into(),
             MenuItem::Separator,
-            item("Show Nous Relic Importer", || Action::Show),
-            item("Open StarRailSim", || Action::OpenSite),
-            item("Settings…", || Action::Settings),
+            item(t("Show Nous Relic Importer"), || Action::Show),
+            item(t("Open StarRailSim"), || Action::OpenSite),
+            item(t("Settings…"), || Action::Settings),
             MenuItem::Separator,
             CheckmarkItem {
-                label: view::SENDING.0.into(),
+                label: t(view::SENDING.0).into(),
                 checked: self.sending,
                 activate: Box::new(|tray: &mut Self| {
                     tray.actions.send(Action::Sending(!tray.sending)).ok();
@@ -77,7 +78,7 @@ impl ksni::Tray for SyncTray {
             }
             .into(),
             CheckmarkItem {
-                label: "Launch on startup".into(),
+                label: t(view::STARTUP.0).into(),
                 enabled: self.setup.installed,
                 checked: self.setup.startup,
                 activate: Box::new(|tray: &mut Self| {
@@ -98,7 +99,7 @@ impl ksni::Tray for SyncTray {
             }
             .into(),
             MenuItem::Separator,
-            item("Quit", || Action::Quit),
+            item(t("Quit"), || Action::Quit),
         ]
     }
 }

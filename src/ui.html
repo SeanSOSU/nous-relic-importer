@@ -6,6 +6,7 @@
 <title>Nous Relic Importer</title>
 <style>
   :root {
+    color-scheme: dark;
     --page: #0a0f1c;
     --ink: #e8eefc;
     --ink-2: #a6b3cc;
@@ -84,11 +85,12 @@
   .stats b { font-size: 22px; font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums; }
   .stats span { color: var(--muted); font-size: 12px; }
   .sets { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; margin: 16px 0 0; }
-  .sets::before { content: "Top relic sets"; flex-basis: 100%; color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+  .sets::before { content: attr(data-label); flex-basis: 100%; color: var(--muted); font-size: 12px; margin-bottom: 4px; }
   .sets figure { margin: 0; display: flex; align-items: center; gap: 6px; color: var(--ink-2); font-size: 13px; font-variant-numeric: tabular-nums; }
   .sets img { width: 34px; height: 34px; object-fit: contain; }
 
-  .detail { margin: 16px 0 0; max-width: 360px; color: var(--ink-2); }
+  .detail { margin: 16px 0 0; max-width: 360px; color: var(--ink-2); text-wrap: balance; }
+  :lang(ko) { word-break: keep-all; }  /* Korean breaks between words, never inside one */
   .detail:empty { display: none; }
   .notice { margin: 10px 0 0; max-width: 360px; color: var(--ink-2); }
   .primary {
@@ -115,6 +117,14 @@
   label.toggle input:checked::after { transform: translateX(16px); background: #fff; }
   label.toggle input:disabled { opacity: .45; cursor: default; }
   label.toggle[aria-disabled="true"] { cursor: default; color: var(--muted); }
+  /* The language picker, on the same line as its label like a switch. */
+  label.choose { display: flex; justify-content: space-between; align-items: center; gap: 16px; font-weight: 500; }
+  label.choose select {
+    appearance: none; font: inherit; font-weight: 400; color: var(--ink); cursor: pointer;
+    background: #141c2e url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23a6b3cc' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 10px center;
+    border: 1px solid var(--line); border-radius: 8px; padding: 5px 30px 5px 10px; min-width: 160px;
+  }
+  label.choose select:hover { border-color: rgba(232, 238, 252, 0.24); }
   .hint { margin: 3px 0 0; color: var(--muted); font-size: 12px; }
   .setting { padding: 12px 0; }
   .setting + .setting { border-top: 1px solid var(--line); }
@@ -149,27 +159,27 @@
       </div>
       <p class="meta"><span id="account"></span><span id="updated"></span></p>
       <div class="stats" id="stats" hidden>
-        <div><b id="n-relics"></b><span>relics</span></div>
-        <div><b id="n-cones"></b><span>light cones</span></div>
-        <div><b id="n-chars"></b><span>characters</span></div>
+        <div><b id="n-relics"></b><span data-t="relics">relics</span></div>
+        <div><b id="n-cones"></b><span data-t="light cones">light cones</span></div>
+        <div><b id="n-chars"></b><span data-t="characters">characters</span></div>
       </div>
       <div class="sets" id="sets" hidden></div>
       <p class="detail" id="detail"></p>
       <p class="notice" id="notice" hidden><span id="notice-text"></span> <button type="button" class="link" id="notice-action"></button></p>
 
-      <button class="primary" type="button" id="open">Open StarRailSim</button>
+      <button class="primary" type="button" id="open" data-t="Open StarRailSim">Open StarRailSim</button>
     </div>
 
     <footer>
       <button type="button" class="icon" id="open-settings" title="Settings" aria-label="Settings">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M9.76 3.90 L10.25 1.14 L13.75 1.14 L14.24 3.90 L16.14 4.69 L18.44 3.08 L20.92 5.56 L19.31 7.86 L20.10 9.76 L22.86 10.25 L22.86 13.75 L20.10 14.24 L19.31 16.14 L20.92 18.44 L18.44 20.92 L16.14 19.31 L14.24 20.10 L13.75 22.86 L10.25 22.86 L9.76 20.10 L7.86 19.31 L5.56 20.92 L3.08 18.44 L4.69 16.14 L3.90 14.24 L1.14 13.75 L1.14 10.25 L3.90 9.76 L4.69 7.86 L3.08 5.56 L5.56 3.08 L7.86 4.69ZM15.30 12.0a3.3 3.3 0 1 0 -6.60 0a3.3 3.3 0 1 0 6.60 0Z"/></svg>
       </button>
-      <p>Closing this window keeps sync running in the background.</p>
+      <p data-t="Closing this window keeps sync running in the background.">Closing this window keeps sync running in the background.</p>
     </footer>
   </div>
 
   <div class="view" id="settings-view" hidden>
-    <h1>Settings</h1>
+    <h1 data-t="Settings">Settings</h1>
     <section class="settings">
       <div class="setting">
         <label class="toggle">
@@ -188,17 +198,30 @@
       <div class="setting" id="updates" hidden>
         <label class="toggle" id="auto-label">
           <input type="checkbox" id="auto">
-          <span>Install updates automatically</span>
+          <span data-t="Install updates automatically">Install updates automatically</span>
         </label>
         <p class="hint" id="update-line"><span id="update-text"></span> <button type="button" class="link" id="update-action" hidden></button></p>
+      </div>
+      <div class="setting">
+        <label class="choose">
+          <span data-t="Language">Language</span>
+          <!-- Each language by its own name; Automatic follows the system's display language. -->
+          <select id="language">
+            <option value="auto" id="language-auto">Automatic</option>
+            <option value="en">English</option>
+            <option value="ja">日本語</option>
+            <option value="ko">한국어</option>
+            <option value="zh-CN">简体中文</option>
+          </select>
+        </label>
       </div>
     </section>
 
     <footer>
       <p>Nous Relic Importer <span id="version"></span></p>
-      <button type="button" id="saved-file" hidden>Saved file</button>
-      <button type="button" id="uninstall" hidden>Uninstall</button>
-      <button type="button" id="quit">Quit</button>
+      <button type="button" id="saved-file" data-t="Saved file" hidden>Saved file</button>
+      <button type="button" id="uninstall" data-t="Uninstall" hidden>Uninstall</button>
+      <button type="button" id="quit" data-t="Quit">Quit</button>
     </footer>
   </div>
 
@@ -212,6 +235,11 @@
   $("settings-view").hidden = VIEW !== "settings";
   if (VIEW === "settings") document.title = "Settings · Nous Relic Importer";
 
+  // The page's own words come with each state, in the app's language; until the first one, English.
+  let strings = null;
+  let lang = "en";
+  const T = (english) => (strings && strings[english]) || english;
+
   // In a browser (the Linux app opens its window there) the app's local socket stands in for the web view's
   // bridge. The page's own address carries the token the socket asks for.
   let updating = false;
@@ -223,10 +251,10 @@
     socket.onmessage = (e) => window.render(JSON.parse(e.data));
     socket.onclose = () => {
       shown = null;
-      $("headline").textContent = updating ? "Installing the update" : "Nous Relic Importer is not running";
-      $("detail").textContent = updating
+      $("headline").textContent = T(updating ? "Installing the update" : "Nous Relic Importer is not running");
+      $("detail").textContent = T(updating
         ? "The new version opens its own window in a moment, once you have entered your password."
-        : "Start it from your app menu, then reload this page.";
+        : "Start it from your app menu, then reload this page.");
       document.documentElement.style.setProperty("--tone", TONES.warn);
       Object.assign($("dot").dataset, { tone: "warn", live: "false" });
       document.querySelectorAll("button, input").forEach((el) => (el.disabled = true));
@@ -256,21 +284,30 @@
   }
 
   // "5 minutes ago", kept true by drawing again every half minute; the exact time is the tooltip.
-  const stamp = (ms) => new Date(ms).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
-  const AGO = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+  const stamp = (ms) => new Date(ms).toLocaleString(lang, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
   const ago = (ms) => {
     const seconds = (ms - Date.now()) / 1000;
+    const relative = new Intl.RelativeTimeFormat(lang, { numeric: "auto" });
     for (const [unit, size] of [["day", 86400], ["hour", 3600], ["minute", 60]]) {
-      if (Math.abs(seconds) >= size) return AGO.format(Math.trunc(seconds / size), unit);
+      if (Math.abs(seconds) >= size) return relative.format(Math.trunc(seconds / size), unit);
     }
-    return "just now";
+    return T("just now");
   };
-  const when = (ms, fresh) => (fresh ? "Last updated " : "Saved ") + ago(ms);
+  const when = (ms, fresh) => T(fresh ? "Last updated {ago}" : "Saved {ago}").replace("{ago}", ago(ms));
   setInterval(() => shown && window.render(shown), 30000);
 
   let drawn = { faces: "", sets: "", updatedAt: null };
   window.render = (s) => {
     shown = s;
+    strings = s.strings;
+    lang = s.lang || "en";
+    document.documentElement.lang = lang;  // CJK text in each language's own glyphs
+    document.querySelectorAll("[data-t]").forEach((el) => (el.textContent = T(el.dataset.t)));
+    $("open-settings").title = $("open-settings").ariaLabel = T("Settings");
+    if (VIEW === "settings") document.title = T("Settings") + " · Nous Relic Importer";
+    $("sets").dataset.label = T("Top relic sets");
+    $("language").value = s.language || "auto";
+    $("language-auto").textContent = T("Automatic") + (s.systemLanguage ? " (" + s.systemLanguage + ")" : "");
     const synced = s.summary && s.updatedAt;
     $("version").textContent = "v" + s.version;
     document.documentElement.style.setProperty("--tone", TONES[s.tone] || TONES.idle);
@@ -328,14 +365,14 @@
 
     $("sending-text").textContent = s.sendingLabel;
     $("sending").checked = s.sending;
-    $("sending-hint").textContent = s.sending ? s.sendingHint : "Off: the site keeps what it last got.";
+    $("sending-hint").textContent = s.sending ? s.sendingHint : T("Off: the site keeps what it last got.");
     $("startup-text").textContent = s.startupLabel;
     $("startup").checked = s.startup;
     $("startup").disabled = !s.installed;
     $("startup-label").setAttribute("aria-disabled", String(!s.installed));
     $("startup-hint").textContent = s.installed
       ? s.startupHint
-      : "Available once installed: run the downloaded file without --portable.";
+      : T("Available once installed: run the downloaded file without --portable.");
     $("uninstall").hidden = !s.installed;
     $("saved-file").hidden = !s.savedFile;
     $("saved-file").title = s.savedFile || "";
@@ -348,7 +385,7 @@
     if (u) {
       $("auto-label").hidden = !u.canAuto;
       $("auto").checked = u.auto;
-      $("update-text").textContent = u.text + (u.checkedAt ? " Last checked " + ago(u.checkedAt) + "." : "");
+      $("update-text").textContent = u.text + (u.checkedAt ? " " + T("Last checked {ago}.").replace("{ago}", ago(u.checkedAt)) : "");
       $("update-text").title = u.checkedAt ? stamp(u.checkedAt) : "";
       for (const id of ["update-action", "notice-action"]) {
         $(id).hidden = !u.action;
@@ -373,9 +410,10 @@
   for (const id of ["update-action", "notice-action"]) {
     $(id).addEventListener("click", (e) => send("update-" + e.target.dataset.action));
   }
+  $("language").addEventListener("change", (e) => send("language:" + e.target.value));
   $("quit").addEventListener("click", () => send("quit"));
   $("uninstall").addEventListener("click", () => {
-    if (confirm("Uninstall Nous Relic Importer? It stops syncing and removes itself from this computer.")) send("uninstall");
+    if (confirm(T("Uninstall Nous Relic Importer? It stops syncing and removes itself from this computer."))) send("uninstall");
   });
   document.addEventListener("contextmenu", (e) => e.preventDefault());
   send("ready");

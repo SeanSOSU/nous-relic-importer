@@ -8,6 +8,7 @@ mod app;
 mod capture;
 mod emulator;
 mod hub;
+mod i18n;
 #[cfg(windows)]
 mod install;
 #[cfg(target_os = "linux")]
@@ -177,6 +178,7 @@ fn init_logging() {
 #[cfg(windows)]
 fn main() {
     init_logging();
+    i18n::apply();
     let options = Options::parse();
     let open_site = || {
         open::that_detached(&options.site).ok();
@@ -185,17 +187,17 @@ fn main() {
     if options.uninstall {
         if !win::is_elevated() {
             if !win::relaunch_elevated() {
-                win::message("Uninstalling Nous Relic Importer needs administrator access, to remove its sign-in task.");
+                win::message(i18n::t("Uninstalling Nous Relic Importer needs administrator access, to remove its sign-in task."));
             }
             return;
         }
         if win::SingleInstance::other_running() && !win::Signal::quit_and_wait(std::time::Duration::from_secs(10)) {
-            win::message("Quit Nous Relic Importer from its tray icon, then uninstall it again.");
+            win::message(i18n::t("Quit Nous Relic Importer from its tray icon, then uninstall it again."));
             return;
         }
         if let Err(e) = install::uninstall() {
             tracing::warn!(%e, "uninstall did not finish");
-            win::message(&format!("Uninstalling did not finish: {e}"));
+            win::message(&i18n::tf("Uninstalling did not finish: {e}", &[("e", &e.to_string())]));
         }
         return;
     }
@@ -224,7 +226,7 @@ fn main() {
                 return;
             }
             if !win::relaunch_elevated() {
-                win::message("Nous Relic Importer needs administrator access to read the game's network traffic. Run it again and choose Yes.");
+                win::message(i18n::t("Nous Relic Importer needs administrator access to read the game's network traffic. Run it again and choose Yes."));
             }
             return;
         }
@@ -232,7 +234,7 @@ fn main() {
             if win::SingleInstance::other_running() {
                 // A different build: an update. The running copy steps aside so this one can replace it.
                 if !win::Signal::quit_and_wait(std::time::Duration::from_secs(10)) {
-                    win::message("Quit Nous Relic Importer from its tray icon, then run this again to update it.");
+                    win::message(i18n::t("Quit Nous Relic Importer from its tray icon, then run this again to update it."));
                     return;
                 }
             }
@@ -368,15 +370,15 @@ fn may_capture(exe: &std::path::Path) -> bool {
     match install::grant_capture(exe) {
         Grant::Granted => true,
         Grant::Refused => {
-            linux::message(
+            linux::message(i18n::t(
                 "Nous Relic Importer needs your password once, to let it read the game's network traffic. Start it again and enter your password when asked. A Steam Deck has no password until you set one: open Konsole and run passwd.",
-            );
+            ));
             false
         }
         Grant::Unavailable => {
-            linux::message(&format!(
-                "This system has no password prompt for apps (pkexec), so Nous Relic Importer cannot ask for the permission it needs. Run this once in a terminal, then start it again:\n\n{}",
-                install::manual_grant(exe)
+            linux::message(&i18n::tf(
+                "This system has no password prompt for apps (pkexec), so Nous Relic Importer cannot ask for the permission it needs. Run this once in a terminal, then start it again:\n\n{command}",
+                &[("command", &install::manual_grant(exe))],
             ));
             false
         }
@@ -400,6 +402,7 @@ fn main() {
         std::process::exit(2);
     }
     init_logging();
+    i18n::apply();
     if options.update {
         options.take_over();
     }
@@ -415,12 +418,12 @@ fn main() {
 
     if options.uninstall {
         if SingleInstance::other_running() && !Signal::quit_and_wait(Duration::from_secs(10)) {
-            message("Quit Nous Relic Importer from its tray icon, then uninstall it again.");
+            message(i18n::t("Quit Nous Relic Importer from its tray icon, then uninstall it again."));
             return;
         }
         match install::uninstall() {
-            Ok(()) => message("Nous Relic Importer is uninstalled."),
-            Err(e) => message(&format!("Uninstalling did not finish: {e}")),
+            Ok(()) => message(i18n::t("Nous Relic Importer is uninstalled.")),
+            Err(e) => message(&i18n::tf("Uninstalling did not finish: {e}", &[("e", &e.to_string())])),
         }
         return;
     }
@@ -437,7 +440,7 @@ fn main() {
         if !options.portable && !install::running_installed() {
             // A different build: an update. The running copy steps aside so this one can replace it.
             if SingleInstance::other_running() && !Signal::quit_and_wait(Duration::from_secs(10)) {
-                message("Quit Nous Relic Importer from its tray icon, then run this again to update it.");
+                message(i18n::t("Quit Nous Relic Importer from its tray icon, then run this again to update it."));
                 return;
             }
             match install::install(&startup_args) {
@@ -459,9 +462,9 @@ fn main() {
         if matches!(&socket, Some(Err(e)) if e.kind() == std::io::ErrorKind::PermissionDenied) {
             let exe = std::env::current_exe().unwrap_or_default();
             if std::env::var_os(GRANTED).is_some() {
-                message(&format!(
-                    "This system did not apply the permission to read network traffic, usually because the home folder does not allow it. Run this once in a terminal, then start Nous Relic Importer again:\n\n{}",
-                    install::manual_grant(&exe)
+                message(&i18n::tf(
+                    "This system did not apply the permission to read network traffic, usually because the home folder does not allow it. Run this once in a terminal, then start Nous Relic Importer again:\n\n{command}",
+                    &[("command", &install::manual_grant(&exe))],
                 ));
             } else if may_capture(&exe) {
                 use std::os::unix::process::CommandExt;

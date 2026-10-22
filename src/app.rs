@@ -11,6 +11,7 @@ use tray_icon::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIc
 use wry::{WebContext, WebView, WebViewBuilder};
 
 use crate::hub::Hub;
+use crate::i18n::{self, t};
 use crate::update::{Request, Updater};
 use crate::view::{self, Setup, Tone, disc};
 use crate::win::Signal;
@@ -39,14 +40,14 @@ impl View {
     fn title(self) -> String {
         match self {
             View::Main => APP_NAME.to_owned(),
-            View::Settings => format!("{APP_NAME} settings"),
+            View::Settings => t("Nous Relic Importer settings").to_owned(),
         }
     }
 
     fn height(self) -> f64 {
         match self {
             View::Main => 560.0,
-            View::Settings => 300.0,
+            View::Settings => 360.0,
         }
     }
 
@@ -84,14 +85,14 @@ impl Tray {
     /// None only if Windows refuses the icon's hidden window; a taskbar that is not up yet (an early sign-in)
     /// is fine, as tray-icon adds the icon when it appears.
     fn new(sending: bool, startup: bool, installed: bool) -> Option<Self> {
-        let status = MenuItem::new("Starting…", false, None);
-        let show = MenuItem::new("Show Nous Relic Importer", true, None);
-        let open = MenuItem::new("Open StarRailSim", true, None);
-        let settings = MenuItem::new("Settings…", true, None);
-        let sending = CheckMenuItem::new(view::SENDING.0, true, sending, None);
-        let startup = CheckMenuItem::new("Launch on startup", installed, startup, None);
-        let update = MenuItem::new("Check for updates", true, None);
-        let quit = MenuItem::new("Quit", true, None);
+        let status = MenuItem::new(t("Starting…"), false, None);
+        let show = MenuItem::new(t("Show Nous Relic Importer"), true, None);
+        let open = MenuItem::new(t("Open StarRailSim"), true, None);
+        let settings = MenuItem::new(t("Settings…"), true, None);
+        let sending = CheckMenuItem::new(t(view::SENDING.0), true, sending, None);
+        let startup = CheckMenuItem::new(t(view::STARTUP.0), installed, startup, None);
+        let update = MenuItem::new(t("Check for updates"), true, None);
+        let quit = MenuItem::new(t("Quit"), true, None);
         let menu = Menu::new();
         menu.append_items(&[
             &status,
@@ -119,6 +120,13 @@ impl Tray {
     }
 
     fn update(&mut self, headline: &str, tone: Tone) {
+        // The fixed items too, so a language change shows at once.
+        self.show.set_text(t("Show Nous Relic Importer"));
+        self.open.set_text(t("Open StarRailSim"));
+        self.settings.set_text(t("Settings…"));
+        self.sending.set_text(t(view::SENDING.0));
+        self.startup.set_text(t(view::STARTUP.0));
+        self.quit.set_text(t("Quit"));
         self.status.set_text(headline);
         let tooltip: String = format!("{APP_NAME}\n{headline}").chars().take(127).collect();
         self.icon.set_tooltip(Some(tooltip)).ok();
@@ -279,6 +287,13 @@ pub fn run(hub: Hub, updater: Updater, launch: Launch, quit: Signal, show_signal
                 "quit" => {
                     tray = None;
                     *control_flow = ControlFlow::Exit;
+                }
+                language if language.starts_with("language:") => {
+                    i18n::set_choice(&language["language:".len()..]);
+                    for (view, window, _) in &windows {
+                        window.set_title(&view.title());
+                    }
+                    refresh = true;
                 }
                 "uninstall" => {
                     if let Err(e) = install::uninstall() {

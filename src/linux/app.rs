@@ -168,6 +168,10 @@ pub fn run(hub: Hub, updater: Updater, launch: Launch, work: Work, quit: Signal,
                     setup_tx.send_modify(|s| s.startup = install::startup_registered());
                 }
                 Action::Sending(on) => crate::settings::set_sending(&hub, on),
+                Action::Language(code) => {
+                    crate::i18n::set_choice(&code);
+                    setup_tx.send_modify(|_| {}); // the tray and open pages redraw in the new language
+                }
                 Action::Update(request) => updater.ask(request),
                 Action::Quit => break,
                 Action::Uninstall => {

@@ -15,6 +15,8 @@ pub enum Action {
     /// The Auto import switch.
     Sending(bool),
     Startup(bool),
+    /// A language code, or "auto".
+    Language(String),
     Update(crate::update::Request),
     Quit,
     Uninstall,

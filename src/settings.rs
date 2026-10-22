@@ -15,8 +15,20 @@ pub fn get(key: &str, default: bool) -> bool {
 }
 
 pub fn set(key: &str, on: bool) {
+    save(key, on.into());
+}
+
+pub fn get_text(key: &str, default: &str) -> String {
+    read().get(key).and_then(|v| v.as_str()).unwrap_or(default).to_owned()
+}
+
+pub fn set_text(key: &str, value: &str) {
+    save(key, value.into());
+}
+
+fn save(key: &str, value: serde_json::Value) {
     let mut settings = read();
-    settings.insert(key.into(), on.into());
+    settings.insert(key.into(), value);
     if let Err(e) = std::fs::write(file(), serde_json::Value::Object(settings).to_string()) {
         tracing::warn!(%e, key, "could not save a setting");
     }

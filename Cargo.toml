@@ -34,6 +34,7 @@ tray-icon = "0.26"
 wry = "0.57"
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
+    "Win32_Globalization",
     "Win32_Security",
     "Win32_Security_Authorization",
     "Win32_System_Registry",
