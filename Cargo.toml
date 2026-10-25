@@ -3,7 +3,7 @@ members = ["core", "decoder", "tools/release"]
 
 [package]
 name = "nous-relic-importer"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 license = "MIT"
 description = "Keeps StarRailSim's relic inventory in step with your game account, read from the game's own network traffic"
