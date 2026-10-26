@@ -131,7 +131,7 @@ const PAGE: &[&str] = &[
     "Available once installed: run the downloaded file without --portable.",
     "Saved file",
     "Uninstall",
-    "Quit",
+    "Back",
     "Last updated {ago}",
     "Saved {ago}",
     "just now",
@@ -224,7 +224,7 @@ const TABLE: &[(&str, [&str; 3])] = &[
     ("Open StarRailSim", ["StarRailSimを開く", "StarRailSim 열기", "打开 StarRailSim"]),
     ("Settings…", ["設定…", "설정…", "设置…"]),
     ("Quit", ["終了", "종료", "退出"]),
-    ("Nous Relic Importer settings", ["Nous Relic Importer の設定", "Nous Relic Importer 설정", "Nous Relic Importer 设置"]),
+    ("Back", ["戻る", "뒤로", "返回"]),
     // Updates.
     ("Checks for a new version shortly.", ["まもなく新しいバージョンを確認します。", "곧 새 버전을 확인합니다.", "即将检查新版本。"]),
     ("Check now", ["今すぐ確認", "지금 확인", "立即检查"]),

@@ -1,6 +1,6 @@
-//! What the user sees: a notification-area icon that is always there, a small window that opens on a manual
-//! launch or a click on the icon, and a settings window opened from either. Each window is built when shown and
-//! torn down when closed, so the copy that starts at sign-in costs nothing until someone looks at it.
+//! What the user sees: a notification-area icon that is always there, and one small window that opens on a manual
+//! launch or a click on the icon, showing its main view or its settings. The window is built when shown and torn
+//! down when closed, so the copy that starts at sign-in costs nothing until someone looks at it.
 
 use tao::dpi::LogicalSize;
 use tao::event::{Event, StartCause, WindowEvent};
@@ -29,7 +29,7 @@ enum UserEvent {
     Quit,
 }
 
-/// The two windows, one page: the settings window is the same page told to show its settings view.
+/// Which of the window's two views to show; the page switches between them itself.
 #[derive(Clone, Copy, PartialEq)]
 enum View {
     Main,
@@ -37,24 +37,10 @@ enum View {
 }
 
 impl View {
-    fn title(self) -> String {
+    fn name(self) -> &'static str {
         match self {
-            View::Main => APP_NAME.to_owned(),
-            View::Settings => t("Nous Relic Importer settings").to_owned(),
-        }
-    }
-
-    fn height(self) -> f64 {
-        match self {
-            View::Main => 560.0,
-            View::Settings => 360.0,
-        }
-    }
-
-    fn script(self) -> &'static str {
-        match self {
-            View::Main => "",
-            View::Settings => "window.NRI_VIEW = 'settings';",
+            View::Main => "main",
+            View::Settings => "settings",
         }
     }
 }
@@ -144,8 +130,8 @@ fn open_window(
     view: View,
 ) -> Option<(Window, WebView)> {
     let window = WindowBuilder::new()
-        .with_title(view.title())
-        .with_inner_size(LogicalSize::new(460.0, view.height()))
+        .with_title(APP_NAME)
+        .with_inner_size(LogicalSize::new(460.0, 560.0))
         .with_resizable(false)
         .with_maximizable(false)
         .with_theme(Some(Theme::Dark))
@@ -155,7 +141,7 @@ fn open_window(
         .ok()?;
     let proxy = proxy.clone();
     let webview = WebViewBuilder::new_with_web_context(context)
-        .with_initialization_script(view.script())
+        .with_initialization_script(&format!("window.NRI_VIEW = '{}';", view.name()))
         .with_html(UI)
         .with_background_color(PAGE)
         .with_ipc_handler(move |request| {
@@ -218,7 +204,7 @@ pub fn run(hub: Hub, updater: Updater, launch: Launch, quit: Signal, show_signal
     let installed = install::running_installed();
     let mut startup = install::startup_registered();
     let mut tray: Option<Tray> = None;
-    let mut windows: Vec<(View, Window, WebView)> = Vec::new();
+    let mut window: Option<(Window, WebView)> = None;
     let mut context = WebContext::new(Some(crate::data_dir().join("webview")));
 
     let account = hub.clone();
@@ -268,7 +254,6 @@ pub fn run(hub: Hub, updater: Updater, launch: Launch, quit: Signal, show_signal
             }
             Event::UserEvent(UserEvent::Ui(message)) => match message.as_str() {
                 "ready" => refresh = true,
-                "settings" => show = Some(View::Settings),
                 "open-site" => {
                     open::that_detached(&launch.site).ok();
                 }
@@ -284,15 +269,8 @@ pub fn run(hub: Hub, updater: Updater, launch: Launch, quit: Signal, show_signal
                     startup = install::startup_registered();
                     refresh = true;
                 }
-                "quit" => {
-                    tray = None;
-                    *control_flow = ControlFlow::Exit;
-                }
                 language if language.starts_with("language:") => {
                     i18n::set_choice(&language["language:".len()..]);
-                    for (view, window, _) in &windows {
-                        window.set_title(&view.title());
-                    }
                     refresh = true;
                 }
                 "uninstall" => {
@@ -312,23 +290,22 @@ pub fn run(hub: Hub, updater: Updater, launch: Launch, quit: Signal, show_signal
                 *control_flow = ControlFlow::Exit;
             }
             Event::WindowEvent { window_id, event: WindowEvent::CloseRequested, .. } => {
-                windows.retain(|(_, w, _)| w.id() != window_id);
+                if window.as_ref().is_some_and(|(w, _)| w.id() == window_id) {
+                    window = None;
+                }
             }
             _ => {}
         }
 
         if let Some(view) = show {
-            match windows.iter().find(|(v, ..)| *v == view) {
-                Some((_, w, _)) => {
+            match &window {
+                Some((w, webview)) => {
+                    webview.evaluate_script(&format!("window.showView && window.showView('{}')", view.name())).ok();
                     w.set_visible(true);
                     w.set_minimized(false);
                     w.set_focus();
                 }
-                None => {
-                    if let Some((w, webview)) = open_window(target, &mut context, &proxy, view) {
-                        windows.push((view, w, webview));
-                    }
-                }
+                None => window = open_window(target, &mut context, &proxy, view),
             }
         }
         if refresh {
@@ -342,7 +319,7 @@ pub fn run(hub: Hub, updater: Updater, launch: Launch, quit: Signal, show_signal
                 t.update.set_enabled(request.is_some());
                 t.update_request = request;
             }
-            for (_, _, webview) in &windows {
+            if let Some((_, webview)) = &window {
                 webview.evaluate_script(&format!("window.render && window.render({json})")).ok();
             }
         }

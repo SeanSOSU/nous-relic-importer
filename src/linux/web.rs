@@ -74,7 +74,6 @@ fn action(message: &str) -> Option<Action> {
         "sending-off" => Action::Sending(false),
         "startup-on" => Action::Startup(true),
         "startup-off" => Action::Startup(false),
-        "quit" => Action::Quit,
         "uninstall" => Action::Uninstall,
         language if language.starts_with("language:") => Action::Language(language["language:".len()..].to_owned()),
         other => Action::Update(Request::from_message(other)?),

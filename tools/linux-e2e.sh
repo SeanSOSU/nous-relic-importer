@@ -81,10 +81,9 @@ if [ "${HOLD:-0}" != 0 ]; then
   sleep "$HOLD"
 fi
 
-echo "== quit from the window, then uninstall"
-$E2E window "ws://127.0.0.1:23314/ui?token=$TOKEN" http://127.0.0.1:23314 quit
-wait_for "! kill -0 $PID 2>/dev/null"
+echo "== uninstall while it runs: the running copy quits first"
 su tester -c "$INSTALLED --uninstall" || true
+wait_for "! kill -0 $PID 2>/dev/null"
 for f in .local/share/nous-relic-importer .local/state/nous-relic-importer .local/share/applications/nous-relic-importer.desktop \
          .config/autostart/nous-relic-importer.desktop; do
   [ ! -e "$H/$f" ] || fail "uninstall left $f"

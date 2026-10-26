@@ -101,7 +101,12 @@
   }
   .primary:hover { filter: brightness(1.08); }
 
-  .view h1 { margin: 4px 0 0; font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+  /* Settings' heading, with the way back to the main view on its left. */
+  .bar { display: flex; align-items: center; gap: 6px; margin: 2px 0 0 -8px; }
+  .bar h1 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+  .bar button { display: grid; place-items: center; width: 32px; height: 32px; color: var(--ink-2); background: none; border: none; border-radius: 8px; cursor: pointer; }
+  .bar button:hover { color: var(--ink); background: rgba(232, 238, 252, 0.08); }
+  .bar button svg { width: 20px; height: 20px; }
   .settings { margin-top: 14px; }
   /* A switch on the right of its label, the hint under both. */
   label.toggle { display: flex; flex-direction: row-reverse; justify-content: space-between; align-items: center; gap: 16px; cursor: pointer; font-weight: 500; }
@@ -179,7 +184,12 @@
   </div>
 
   <div class="view" id="settings-view" hidden>
-    <h1 data-t="Settings">Settings</h1>
+    <header class="bar">
+      <button type="button" id="back" title="Back" aria-label="Back">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <h1 data-t="Settings">Settings</h1>
+    </header>
     <section class="settings">
       <div class="setting">
         <label class="toggle">
@@ -221,7 +231,6 @@
       <p>Nous Relic Importer <span id="version"></span></p>
       <button type="button" id="saved-file" data-t="Saved file" hidden>Saved file</button>
       <button type="button" id="uninstall" data-t="Uninstall" hidden>Uninstall</button>
-      <button type="button" id="quit" data-t="Quit">Quit</button>
     </footer>
   </div>
 
@@ -229,16 +238,23 @@
   const $ = (id) => document.getElementById(id);
   const TONES = { ok: "#199e70", warn: "#d9a441", idle: "#8a8f98" };
 
-  // One page, two windows: the settings window is this page told to show its settings view.
-  const VIEW = window.NRI_VIEW || (location.hash === "#settings" ? "settings" : "main");
-  $("main-view").hidden = VIEW !== "main";
-  $("settings-view").hidden = VIEW !== "settings";
-  if (VIEW === "settings") document.title = "Settings · Nous Relic Importer";
-
   // The page's own words come with each state, in the app's language; until the first one, English.
   let strings = null;
   let lang = "en";
   const T = (english) => (strings && strings[english]) || english;
+
+  // One window, two views: the gear swaps in Settings and the arrow swaps back. The app opens it on Settings with
+  // NRI_VIEW (Windows) or #settings (a browser on Linux), and calls showView for its tray's Settings item.
+  let view = window.NRI_VIEW || (location.hash === "#settings" ? "settings" : "main");
+  window.showView = (next) => {
+    view = next;
+    $("main-view").hidden = view !== "main";
+    $("settings-view").hidden = view !== "settings";
+    document.title = view === "settings" ? T("Settings") + " · Nous Relic Importer" : "Nous Relic Importer";
+    if (location.protocol === "http:") history.replaceState(null, "", location.pathname + location.search + (view === "settings" ? "#settings" : ""));
+  };
+  window.showView(view);
+  addEventListener("hashchange", () => window.showView(location.hash === "#settings" ? "settings" : "main"));
 
   // In a browser (the Linux app opens its window there) the app's local socket stands in for the web view's
   // bridge. The page's own address carries the token the socket asks for.
@@ -304,7 +320,8 @@
     document.documentElement.lang = lang;  // CJK text in each language's own glyphs
     document.querySelectorAll("[data-t]").forEach((el) => (el.textContent = T(el.dataset.t)));
     $("open-settings").title = $("open-settings").ariaLabel = T("Settings");
-    if (VIEW === "settings") document.title = T("Settings") + " · Nous Relic Importer";
+    $("back").title = $("back").ariaLabel = T("Back");
+    if (view === "settings") document.title = T("Settings") + " · Nous Relic Importer";
     $("sets").dataset.label = T("Top relic sets");
     $("language").value = s.language || "auto";
     $("language-auto").textContent = T("Automatic") + (s.systemLanguage ? " (" + s.systemLanguage + ")" : "");
@@ -398,11 +415,9 @@
   };
 
   $("open").addEventListener("click", () => send("open-site"));
-  // In a browser (Linux) Settings is a small window of the browser's own; the app opens it everywhere else.
-  $("open-settings").addEventListener("click", () =>
-    location.protocol === "http:"
-      ? window.open(location.pathname + location.search + "#settings", "nri-settings", "popup,width=460,height=480")
-      : send("settings"));
+  $("open-settings").addEventListener("click", () => window.showView("settings"));
+  $("back").addEventListener("click", () => window.showView("main"));
+  document.addEventListener("keydown", (e) => e.key === "Escape" && view === "settings" && window.showView("main"));
   $("saved-file").addEventListener("click", () => send("show-file"));
   $("sending").addEventListener("change", (e) => send(e.target.checked ? "sending-on" : "sending-off"));
   $("startup").addEventListener("change", (e) => send(e.target.checked ? "startup-on" : "startup-off"));
@@ -411,7 +426,6 @@
     $(id).addEventListener("click", (e) => send("update-" + e.target.dataset.action));
   }
   $("language").addEventListener("change", (e) => send("language:" + e.target.value));
-  $("quit").addEventListener("click", () => send("quit"));
   $("uninstall").addEventListener("click", () => {
     if (confirm(T("Uninstall Nous Relic Importer? It stops syncing and removes itself from this computer."))) send("uninstall");
   });

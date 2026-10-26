@@ -31,8 +31,8 @@ they have and say the app is paused; back on, they start over from the account a
 read and saved while it is off.
 
 The window says what it is doing and what to do next; closing it keeps sync running in the notification area.
-**Settings** (the window's gear, or the tray menu) opens a window of its own with the switches, updates,
-**Uninstall** and **Quit**; the tray menu has **Quit** too.
+**Settings** (the window's gear, or the tray menu) turns the same window to the switches, updates, language and
+**Uninstall**; the arrow (or Esc) turns it back. **Quit**, in the tray menu, stops the app until the next sign-in.
 The tray icon is grey while it waits for the game, teal once your account is synced, and amber when it needs
 you (log back in, or something stopped it). Left-click it, or use the Start menu shortcut, to bring the window
 back; neither asks for administrator access again.
