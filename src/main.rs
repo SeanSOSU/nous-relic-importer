@@ -2,19 +2,16 @@
 //! to StarRailSim over a local socket, so the site's relic inventory follows the game without exports.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod accounts;
 #[cfg(windows)]
 mod app;
 mod capture;
 mod emulator;
-mod hub;
 mod i18n;
 #[cfg(windows)]
 mod install;
 #[cfg(target_os = "linux")]
 mod linux;
 mod record;
-mod server;
 mod settings;
 #[cfg(any(windows, target_os = "linux"))]
 mod update;
@@ -23,6 +20,9 @@ mod view;
 mod win;
 
 use std::path::PathBuf;
+
+// Shared with the Android app; the paths stay crate::hub and so on.
+use sync_live::{accounts, hub, server};
 
 pub const APP_NAME: &str = "Nous Relic Importer";
 // `?sync=1` turns sync on as the page opens, so arriving from the app needs no click there.

@@ -13,10 +13,10 @@ use reliquary::network::command::{GameCommand, GameCommandError};
 use reliquary::network::{GamePacket, GameSniffer, NetworkError};
 use sync_core::export::Exporter;
 use sync_core::export::fribbels::OptimizerExporter;
-use sync_core::packets::{EMULATOR_PORT, TcpStream, Transport, ethernet_frame, transport};
+use sync_core::packets::{EMULATOR_PORT, TcpStream, Transport, ethernet_frame, ip_packet, transport};
 
 mod capture;
-use capture::{Packet, ip_packet, read_capture};
+use capture::{Packet, read_capture};
 
 #[derive(Default)]
 struct Decoder {

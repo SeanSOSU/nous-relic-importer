@@ -75,6 +75,38 @@ pub fn ip_in_ethernet(frame: &[u8]) -> Option<(u16, &[u8])> {
     }
 }
 
+fn by_version(ip: &[u8]) -> Option<(u16, &[u8])> {
+    match ip.first()? >> 4 {
+        4 => Some((0x0800, ip)),
+        6 => Some((0x86dd, ip)),
+        _ => None,
+    }
+}
+
+/// The IP packet inside a captured frame, with its EtherType.
+pub fn ip_packet(link: u32, data: &[u8]) -> Option<(u16, &[u8])> {
+    match link {
+        // Ethernet, possibly VLAN-tagged.
+        1 => ip_in_ethernet(data),
+        // Raw IP: PCAPdroid on Android, macOS rvictl and many tcpdump captures.
+        12 | 14 | 101 => by_version(data),
+        228 => Some((0x0800, data)),
+        229 => Some((0x86dd, data)),
+        // BSD loopback: a four-byte address family first.
+        0 | 108 => by_version(data.get(4..)?),
+        // Linux "any" device, cooked headers v1 and v2.
+        113 => by_version(data.get(16..)?),
+        276 => by_version(data.get(20..)?),
+        // macOS PKTAP: its own header, then a frame of the link type it names.
+        258 | 149 => {
+            let length = u32::from_le_bytes(data.get(0..4)?.try_into().ok()?) as usize;
+            let inner = u32::from_le_bytes(data.get(8..12)?.try_into().ok()?);
+            ip_packet(inner, data.get(length..)?)
+        }
+        _ => None,
+    }
+}
+
 /// One direction of one TCP connection, put back in order.
 #[derive(Default)]
 pub struct TcpStream {
@@ -118,7 +150,9 @@ impl TcpStream {
 
 #[cfg(test)]
 mod tests {
-    use super::{Transport, ethernet_frame, ip_in_ethernet, transport};
+    use super::{Transport, ethernet_frame, ip_in_ethernet, ip_packet, transport};
+
+    const IPV4: [u8; 20] = [0x45, 0, 0, 20, 0, 0, 0, 0, 64, 17, 0, 0, 127, 0, 0, 1, 127, 0, 0, 1];
 
     fn ipv4_udp(src: u16, dst: u16) -> Vec<u8> {
         let mut ip = vec![0x45, 0, 0, 28, 0, 0, 0, 0, 64, 17, 0, 0, 10, 0, 0, 1, 10, 0, 0, 2];
@@ -137,5 +171,19 @@ mod tests {
         let (ethertype, ip) = ip_in_ethernet(&frame).unwrap();
         assert_eq!(ethertype, 0x0800);
         assert!(matches!(transport(ip), Transport::Udp { src: 23301, dst: 51000 }));
+    }
+
+    #[test]
+    fn each_link_type_unwraps_to_the_same_ip_packet() {
+        let with = |prefix: &[u8]| [prefix, &IPV4[..]].concat();
+        for (link, frame) in [
+            (101, IPV4.to_vec()),
+            (0, with(&[2, 0, 0, 0])),
+            (113, with(&[0; 16])),
+            (276, with(&[0; 20])),
+        ] {
+            assert_eq!(ip_packet(link, &frame), Some((0x0800, &IPV4[..])), "link type {link}");
+        }
+        assert_eq!(ip_packet(147, &IPV4), None, "an unknown link type is skipped, not guessed at");
     }
 }

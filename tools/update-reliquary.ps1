@@ -1,7 +1,7 @@
 # Moves the app to a game patch's protocol. Every patch renumbers the game's commands and reshuffles its messages,
 # and Reliquary (https://github.com/IceDynamix/reliquary, MIT) tags a version that decodes the new ones. This sets
 # that tag on every `reliquary` entry (Cargo.toml, core/Cargo.toml's dependency and build-dependency,
-# decoder/Cargo.toml), and Reliquary's own protobuf version on the capture tests' one:
+# decoder/Cargo.toml, live/Cargo.toml), and Reliquary's own protobuf version on the decoder tests' one:
 #
 #   .\tools\update-reliquary.ps1                       # the newest Reliquary tag
 #   .\tools\update-reliquary.ps1 -Reliquary v25.0.0
@@ -53,7 +53,7 @@ if (-not $Reliquary) {
 $tag ='(?m)^(reliquary = \{[^}]*?\btag = ")([^"]*)(")'
 $previous = [regex]::Match([IO.File]::ReadAllText((Join-Path $root "Cargo.toml")), $tag).Groups[2].Value
 
-# The capture tests write Reliquary's messages through protobuf itself, so theirs must be Reliquary's exact version.
+# The decoder tests (live/src/decoder.rs) write Reliquary's messages through protobuf itself, so theirs must be Reliquary's exact version.
 $protobuf = [regex]::Match((Get-Raw "https://raw.githubusercontent.com/IceDynamix/reliquary/$Reliquary/Cargo.toml"),
     '(?m)^protobuf = (?:\{[^}]*?\bversion = )?"([^"]+)"').Groups[1].Value
 if (-not $protobuf) { throw "Reliquary $Reliquary's Cargo.toml names no protobuf version" }
@@ -61,7 +61,8 @@ if (-not $protobuf) { throw "Reliquary $Reliquary's Cargo.toml names no protobuf
 Set-Entry "Cargo.toml" $tag $Reliquary 1
 Set-Entry "core/Cargo.toml" $tag $Reliquary 2
 Set-Entry "decoder/Cargo.toml" $tag $Reliquary 1
-Set-Entry "Cargo.toml" '(?m)^(protobuf = ")([^"]*)(")' $protobuf 1
+Set-Entry "live/Cargo.toml" $tag $Reliquary 1
+Set-Entry "live/Cargo.toml" '(?m)^(protobuf = ")([^"]*)(")' $protobuf 1
 Write-Host "reliquary $previous -> $Reliquary on every entry, with protobuf $protobuf."
 
 $vendoredFile = Join-Path $root "core/src/export/VENDORED"

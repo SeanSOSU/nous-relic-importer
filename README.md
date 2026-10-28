@@ -217,5 +217,5 @@ only) and is decoded by `cargo test -p sync-decoder`.
 
 The packet decoding and the inventory export are [Reliquary](https://github.com/IceDynamix/reliquary) and
 [Reliquary Archiver](https://github.com/IceDynamix/reliquary-archiver) by IceDynamix and contributors (MIT).
-`core/src/export` is copied from Reliquary Archiver unchanged, and `src/capture.rs` and `core/build.rs` are
+`core/src/export` is copied from Reliquary Archiver unchanged, and `live/src/decoder.rs` and `core/build.rs` are
 adapted from it.

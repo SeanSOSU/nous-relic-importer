@@ -1984,12 +1984,12 @@ dependencies = [
  "minisign-verify",
  "open",
  "pktmon",
- "protobuf",
  "reliquary",
  "roxmltree",
  "serde",
  "serde_json",
  "sync-core",
+ "sync-live",
  "tao",
  "tokio",
  "tracing",
@@ -3248,6 +3248,21 @@ dependencies = [
  "reliquary",
  "serde_json",
  "sync-core",
+]
+
+[[package]]
+name = "sync-live"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "futures",
+ "protobuf",
+ "reliquary",
+ "serde",
+ "serde_json",
+ "sync-core",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

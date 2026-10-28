@@ -85,41 +85,10 @@ fn read_pcapng(file: &[u8]) -> Vec<Packet<'_>> {
     packets
 }
 
-fn by_version(ip: &[u8]) -> Option<(u16, &[u8])> {
-    match ip.first()? >> 4 {
-        4 => Some((0x0800, ip)),
-        6 => Some((0x86dd, ip)),
-        _ => None,
-    }
-}
-
-/// The IP packet inside a captured frame, with its EtherType.
-pub fn ip_packet(link: u32, data: &[u8]) -> Option<(u16, &[u8])> {
-    match link {
-        // Ethernet, possibly VLAN-tagged.
-        1 => sync_core::packets::ip_in_ethernet(data),
-        // Raw IP: PCAPdroid on Android, macOS rvictl and many tcpdump captures.
-        12 | 14 | 101 => by_version(data),
-        228 => Some((0x0800, data)),
-        229 => Some((0x86dd, data)),
-        // BSD loopback: a four-byte address family first.
-        0 | 108 => by_version(data.get(4..)?),
-        // Linux "any" device, cooked headers v1 and v2.
-        113 => by_version(data.get(16..)?),
-        276 => by_version(data.get(20..)?),
-        // macOS PKTAP: its own header, then a frame of the link type it names.
-        258 | 149 => {
-            let length = u32::from_le_bytes(data.get(0..4)?.try_into().ok()?) as usize;
-            let inner = u32::from_le_bytes(data.get(8..12)?.try_into().ok()?);
-            ip_packet(inner, data.get(length..)?)
-        }
-        _ => None,
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{ip_packet, read_capture};
+    use super::read_capture;
+    use sync_core::packets::ip_packet;
 
     const IPV4: [u8; 20] = [0x45, 0, 0, 20, 0, 0, 0, 0, 64, 17, 0, 0, 127, 0, 0, 1, 127, 0, 0, 1];
 
@@ -156,19 +125,5 @@ mod tests {
         let packets = read_capture(&ng).unwrap();
         assert_eq!((packets.len(), packets[0].link), (1, 1));
         assert_eq!(ip_packet(packets[0].link, packets[0].data), Some((0x0800, &IPV4[..])));
-    }
-
-    #[test]
-    fn each_link_type_unwraps_to_the_same_ip_packet() {
-        let with = |prefix: &[u8]| [prefix, &IPV4[..]].concat();
-        for (link, frame) in [
-            (101, IPV4.to_vec()),
-            (0, with(&[2, 0, 0, 0])),
-            (113, with(&[0; 16])),
-            (276, with(&[0; 20])),
-        ] {
-            assert_eq!(ip_packet(link, &frame), Some((0x0800, &IPV4[..])), "link type {link}");
-        }
-        assert_eq!(ip_packet(147, &IPV4), None, "an unknown link type is skipped, not guessed at");
     }
 }
