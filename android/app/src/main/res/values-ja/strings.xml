@@ -6,7 +6,7 @@
     <string name="open_site">StarRailSimを開く</string>
     <string name="share">アカウントファイルを共有</string>
     <string name="ready">インポートの準備ができました</string>
-    <string name="ready_detail">「開始」をタップすると、PCAPdroidがゲームの通信を読み取り始め、ゲームが起動します。ログインすると、アカウントがここに読み込まれます。</string>
+    <string name="ready_detail">「開始」をタップするとゲームが起動します。ログインすると、アカウントがここに読み込まれます。</string>
     <string name="waiting">ゲームを待っています</string>
     <string name="waiting_detail">崩壊：スターレイルを起動し、スタート画面でクリックして開始します。すでにゲーム内にいる場合は、一度ログアウトしてからログインし直してください。</string>
     <string name="game_found">ゲームを検出しました</string>
@@ -22,8 +22,7 @@
     <string name="not_working">動作していません</string>
     <string name="not_working_detail">%1$s。アプリを閉じてから、もう一度開いてください。</string>
     <string name="not_ready">まだ準備ができていません</string>
-    <string name="needs_pcapdroid">このアプリは、無料のキャプチャアプリPCAPdroidを通してゲームの通信を読み取ります。Google Playからインストールしてから、もう一度「開始」をタップしてください。</string>
     <string name="needs_game">このスマホには崩壊：スターレイルがインストールされていません。</string>
-    <string name="pcapdroid_refused">PCAPdroidがキャプチャを開始しませんでした。「開始」をタップして許可してください。</string>
-    <string name="footnote">PCAPdroidがキャプチャするのは崩壊：スターレイルの通信だけで、このスマホの外には出ません。実行中、Androidには鍵のアイコンが表示されます。</string>
+    <string name="vpn_refused">AndroidがアプリのVPNを開始しませんでした。「開始」をタップして接続リクエストを許可してください。</string>
+    <string name="footnote">初回は、このアプリにVPNの実行を許可するかAndroidが確認します。VPNが扱うのは崩壊：スターレイルの通信だけで、通信はそのまま送り届け、その途中でアカウントを読み取ります。実行中は鍵のアイコンが表示されます。</string>
 </resources>

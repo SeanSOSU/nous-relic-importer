@@ -174,7 +174,17 @@ update-key.pub` makes a new one, protected by a password if you add `--password`
 
    It refuses a build of any version other than the one in `Cargo.toml` (each build carries its version in a marker),
    and a key other than the one `update-key.pub` holds.
-3. Publish `dist/` as that release: `gh release create v0.2.0 dist/* --title "Nous Relic Importer 0.2.0"`. The installed
+3. Build the Android app, signed with its release key (`android-release.jks`, whose properties file holds its
+   password; keep both out of the repo and back them up: Android installs an update only over the same key):
+
+   ```
+   cd android
+   ./gradlew assembleRelease --max-workers=2 -PnriSigning=<keys folder>/android-release.properties
+   cp app/build/outputs/apk/release/app-release.apk ../dist/nous-relic-importer.apk
+   ```
+
+   `apksigner verify --print-certs dist/nous-relic-importer.apk` should name `CN=Nous Relic Importer`.
+4. Publish `dist/` as that release: `gh release create v0.2.0 dist/* --title "Nous Relic Importer 0.2.0"`. The installed
    copies read `releases/latest/download/latest.json`, so the newest release must not be a draft or prerelease.
 
 `cargo run -p nri-release -- verify <download>`, with the download's `.minisig` beside it, checks a download by hand
@@ -201,13 +211,15 @@ own icon and version details into anything that depends on it.
 
 ## Android (in development)
 
-`android/` is the importer for a phone, built on [PCAPdroid](https://github.com/emanuele-f/PCAPdroid), which
-captures one app's traffic through Android's VPN service with no root. Start asks PCAPdroid, through its
-control API, to capture only the game and stream it to the app (its TCP exporter, `live/src/collector.rs`),
-then opens the game. Everything after that is the desktop app's `live/` crate: the same decoder, the same
-saved account, and the same page socket on `127.0.0.1:23314` for StarRailSim open in the phone's browser. The
-account can also leave through the share sheet as the archiver's export, which the site imports. The engine is
-`android/engine` (Rust, two JNI calls); the app around it is plain Java with no libraries.
+`android/` is the importer for a phone, one app with nothing else to install. Start turns on the app's own VPN
+for the game only (Android asks once): Android routes the game's traffic to the app, a user-space TCP/IP stack
+([ipstack](https://github.com/narrowlink/ipstack), Apache-2.0) ends each of the game's connections, and the app
+opens the same connection to the same server and passes the bytes on unchanged (`android/engine/src/relay.rs`).
+The game's own packets are copied to the decoder on the way; DNS goes to the phone's own servers. Everything
+after that is the desktop app's `live/` crate: the same decoder, the same saved account, and the same page socket
+on `127.0.0.1:23314` for StarRailSim open in the phone's browser. The account can also leave through the share
+sheet as the archiver's export, which the site imports. The engine is `android/engine` (Rust, four JNI calls);
+the app around it is plain Java with no libraries.
 
 Building needs the Android SDK with NDK r28c, JDK 17 or newer, `cargo install cargo-ndk` and the targets
 `aarch64-linux-android` and `x86_64-linux-android`. Point `android/local.properties` at the SDK
@@ -219,7 +231,8 @@ cd android
 ```
 
 The Gradle build runs cargo-ndk for arm64 phones and the x86_64 emulator first (`-PcargoJobs=` sets its jobs).
-`cargo test -p sync-live` and `cargo test -p nri-android` cover the collector and the engine without a phone.
+The app's version is the one in the root `Cargo.toml`. `cargo test -p nri-android` covers the relay (a datagram
+from a stand-in VPN interface to a real server and back) without a phone.
 
 ## The capture-file decoder
 

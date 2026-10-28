@@ -6,7 +6,7 @@
     <string name="open_site">打开 StarRailSim</string>
     <string name="share">分享账号文件</string>
     <string name="ready">准备导入</string>
-    <string name="ready_detail">点击“开始”后，PCAPdroid 会开始读取游戏的网络通信，并打开游戏。登录后，你的账号会载入这里。</string>
+    <string name="ready_detail">点击“开始”后游戏会打开。登录后，你的账号会载入这里。</string>
     <string name="waiting">正在等待游戏</string>
     <string name="waiting_detail">启动崩坏：星穹铁道并点击开始。如果你已经在游戏中，请先登出再重新登录。</string>
     <string name="game_found">已找到游戏</string>
@@ -22,8 +22,7 @@
     <string name="not_working">无法运行</string>
     <string name="not_working_detail">%1$s。请关闭应用后重新打开。</string>
     <string name="not_ready">尚未就绪</string>
-    <string name="needs_pcapdroid">本应用通过免费抓包应用 PCAPdroid 读取游戏的网络通信。请先从 Google Play 安装它，然后再次点击“开始”。</string>
     <string name="needs_game">这部手机上没有安装崩坏：星穹铁道。</string>
-    <string name="pcapdroid_refused">PCAPdroid 没有开始抓包。请点击“开始”并允许。</string>
-    <string name="footnote">PCAPdroid 只抓取崩坏：星穹铁道的网络通信，数据不会离开这部手机。运行期间，Android 会显示一个钥匙图标。</string>
+    <string name="vpn_refused">Android 没有启动本应用的 VPN。请点击“开始”并允许连接请求。</string>
+    <string name="footnote">第一次使用时，Android 会询问是否允许本应用运行 VPN。它只承载崩坏：星穹铁道的网络通信，原样转发，并在途中读取你的账号。运行期间会显示一个钥匙图标。</string>
 </resources>

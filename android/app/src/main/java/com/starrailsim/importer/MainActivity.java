@@ -7,10 +7,12 @@ import android.content.pm.PackageManager;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.LayerDrawable;
 import android.net.Uri;
+import android.net.VpnService;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
@@ -18,20 +20,21 @@ import android.widget.TextView;
 import java.util.List;
 
 /**
- * One screen: Start has PCAPdroid capture the game and opens it; the account loads as the player logs in, and
- * reaches StarRailSim open on this phone, or another device through the share sheet.
+ * One screen: Start turns on the app's VPN for the game and opens it; the account loads as the player logs in,
+ * and reaches StarRailSim open on this phone, or another device through the share sheet.
  */
 public final class MainActivity extends Activity {
-    static final String ACTION_STOP = "com.starrailsim.importer.STOP";
     private static final Uri SITE = Uri.parse("https://starrailsim.com/import?sync=1");
-    private static final int START = 1, STOP = 2;
+    private static final int START = 1;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
-    private int collectorPort;
     /** Set when Start cannot go ahead, shown instead of the engine's status until the next Start. */
     private String problem;
     /** What the screen shows now, so a poll that changes nothing redraws nothing. */
     private String shown;
+    /** The game, to open once the VPN is up: Android resets an app's connections as a VPN takes them over. */
+    private Intent game;
+    private long capturingSince;
     private final GradientDrawable ring = new GradientDrawable();
     private TextView headline, detail;
     private Button primary, share;
@@ -39,7 +42,9 @@ public final class MainActivity extends Activity {
     private final Runnable refresh = new Runnable() {
         @Override
         public void run() {
-            show(Status.read());
+            Status status = Status.read();
+            show(status);
+            openGameOnceCapturing(status);
             handler.postDelayed(this, 500);
         }
     };
@@ -61,20 +66,13 @@ public final class MainActivity extends Activity {
         detail = findViewById(R.id.detail);
         primary = findViewById(R.id.primary);
         share = findViewById(R.id.share);
-        collectorPort = Engine.start(getFilesDir().getPath());
+        Engine.start(getFilesDir().getPath());
         primary.setOnClickListener(v -> {
             if (Status.read().capturing) stop();
             else start();
         });
         findViewById(R.id.open_site).setOnClickListener(v -> startActivity(new Intent(Intent.ACTION_VIEW, SITE)));
         share.setOnClickListener(v -> share());
-        if (ACTION_STOP.equals(getIntent().getAction())) stop();
-    }
-
-    @Override
-    protected void onNewIntent(Intent intent) {
-        super.onNewIntent(intent);
-        if (ACTION_STOP.equals(intent.getAction())) stop();
     }
 
     @Override
@@ -91,28 +89,21 @@ public final class MainActivity extends Activity {
 
     private void start() {
         problem = null;
-        PackageManager packages = getPackageManager();
-        if (!Pcapdroid.installed(packages)) {
-            problem = getString(R.string.needs_pcapdroid);
-            startActivity(new Intent(Intent.ACTION_VIEW, Pcapdroid.STORE));
-            return;
-        }
-        List<String> games = Pcapdroid.installedGames(packages);
-        if (games.isEmpty()) {
+        if (Game.installed(getPackageManager()).isEmpty()) {
             problem = getString(R.string.needs_game);
             return;
         }
-        if (collectorPort < 0) return;
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[] {Manifest.permission.POST_NOTIFICATIONS}, 0);
         }
-        startForegroundService(new Intent(this, ImportService.class));
-        startActivityForResult(Pcapdroid.start(collectorPort, games), START);
+        // Android's "Connection request", the first time only.
+        Intent consent = VpnService.prepare(this);
+        if (consent != null) startActivityForResult(consent, START);
+        else onActivityResult(START, RESULT_OK, null);
     }
 
     private void stop() {
-        if (Pcapdroid.installed(getPackageManager())) startActivityForResult(Pcapdroid.control("stop"), STOP);
-        stopService(new Intent(this, ImportService.class));
+        startService(new Intent(this, CaptureService.class).setAction(CaptureService.ACTION_STOP));
     }
 
     @Override
@@ -120,13 +111,23 @@ public final class MainActivity extends Activity {
         super.onActivityResult(request, result, data);
         if (request != START) return;
         if (result != RESULT_OK) {
-            problem = getString(R.string.pcapdroid_refused);
-            stopService(new Intent(this, ImportService.class));
+            problem = getString(R.string.vpn_refused);
             return;
         }
-        List<String> games = Pcapdroid.installedGames(getPackageManager());
-        Intent game = games.isEmpty() ? null : getPackageManager().getLaunchIntentForPackage(games.get(0));
-        if (game != null) startActivity(game);
+        startForegroundService(new Intent(this, CaptureService.class));
+        List<String> games = Game.installed(getPackageManager());
+        game = games.isEmpty() ? null : getPackageManager().getLaunchIntentForPackage(games.get(0));
+        capturingSince = 0;
+    }
+
+    /** Opens the game a second after the capture starts, by when Android has moved the game's traffic onto it. */
+    private void openGameOnceCapturing(Status status) {
+        if (game == null || !status.capturing) return;
+        long now = SystemClock.elapsedRealtime();
+        if (capturingSince == 0) capturingSince = now;
+        if (now - capturingSince < 1000) return;
+        startActivity(game);
+        game = null;
     }
 
     private void share() {

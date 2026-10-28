@@ -1,5 +1,17 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
+}
+
+// The importer's version (the root Cargo.toml), so one release's APK and desktop builds match.
+val importerVersion = rootDir.resolveSibling("Cargo.toml").readLines()
+    .first { it.startsWith("version = ") }.substringAfter('"').substringBefore('"')
+
+// Release builds are signed with the key -PnriSigning=<properties file> names (storeFile, storePassword, keyAlias,
+// keyPassword); without it they come out unsigned.
+val signing = providers.gradleProperty("nriSigning").orNull?.let { path ->
+    Properties().apply { file(path).inputStream().use(::load) }
 }
 
 android {
@@ -11,8 +23,25 @@ android {
         applicationId = "com.starrailsim.importer"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionName = importerVersion
+        versionCode = importerVersion.split('.').map(String::toInt).let { (major, minor, patch) -> major * 10000 + minor * 100 + patch }
+    }
+
+    signingConfigs {
+        if (signing != null) {
+            create("release") {
+                storeFile = file(signing.getProperty("storeFile"))
+                storePassword = signing.getProperty("storePassword")
+                keyAlias = signing.getProperty("keyAlias")
+                keyPassword = signing.getProperty("keyPassword")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            if (signing != null) signingConfig = signingConfigs.getByName("release")
+        }
     }
 
     compileOptions {

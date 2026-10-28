@@ -1,14 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Local sockets only: PCAPdroid's capture in, StarRailSim pages out, both on 127.0.0.1. -->
+    <!-- The game's connections, passed on to where they were going, and StarRailSim pages on 127.0.0.1. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- The phone's DNS servers, which the VPN hands the game. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <queries>
-        <package android:name="com.emanuelef.remote_capture" />
         <package android:name="com.HoYoverse.hkrpgoversea" />
         <package android:name="com.miHoYo.hkrpg" />
         <package android:name="com.miHoYo.hkrpg.bilibili" />
@@ -32,12 +33,16 @@
         </activity>
 
         <service
-            android:name=".ImportService"
+            android:name=".CaptureService"
             android:exported="false"
-            android:foregroundServiceType="specialUse">
+            android:foregroundServiceType="specialUse"
+            android:permission="android.permission.BIND_VPN_SERVICE">
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Receives PCAPdroid's capture of the game over a local socket and serves the account to StarRailSim while the game is in front" />
+                android:value="A VPN for one game only, which reads the player's inventory from the game's traffic and serves it to StarRailSim while the game is in front" />
         </service>
 
         <provider

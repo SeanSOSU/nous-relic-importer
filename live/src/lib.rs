@@ -3,7 +3,6 @@
 //! its packet source.
 
 pub mod accounts;
-pub mod collector;
 pub mod decoder;
 pub mod hub;
 pub mod server;
