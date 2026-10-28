@@ -1,5 +1,5 @@
 [workspace]
-members = ["core", "decoder", "live", "tools/release"]
+members = ["android/engine", "core", "decoder", "live", "tools/release"]
 
 [package]
 name = "nous-relic-importer"

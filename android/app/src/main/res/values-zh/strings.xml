@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="channel">导入</string>
+    <string name="start">开始</string>
+    <string name="stop">停止</string>
+    <string name="open_site">打开 StarRailSim</string>
+    <string name="share">分享账号文件</string>
+    <string name="ready">准备导入</string>
+    <string name="ready_detail">点击“开始”后，PCAPdroid 会开始读取游戏的网络通信，并打开游戏。登录后，你的账号会载入这里。</string>
+    <string name="waiting">正在等待游戏</string>
+    <string name="waiting_detail">启动崩坏：星穹铁道并点击开始。如果你已经在游戏中，请先登出再重新登录。</string>
+    <string name="game_found">已找到游戏</string>
+    <string name="game_found_detail">登录后，你的账号会载入这里。</string>
+    <string name="logging_in">正在载入你的账号…</string>
+    <string name="relog">请登出后重新登录</string>
+    <string name="relog_detail">开始抓包时游戏已在运行，因此错过了登录。请登出到开始界面后重新登录。如果游戏刚刚更新，本应用可能也需要更新。</string>
+    <string name="synced_relics">已同步 %1$s 件遗器</string>
+    <string name="synced_saved">这是上次会话保存的内容。点击“开始”并登录即可更新。</string>
+    <string name="synced_capture_off">抓包已关闭。分享账号文件即可在其他设备上导入，或点击“开始”进行更新。</string>
+    <string name="synced_open_site">在这部手机上打开 StarRailSim 即可载入，或分享账号文件，在其他设备上导入。</string>
+    <string name="synced_up_to_date">StarRailSim 已是最新。你在游戏中的改动会即时同步过去。</string>
+    <string name="not_working">无法运行</string>
+    <string name="not_working_detail">%1$s。请关闭应用后重新打开。</string>
+    <string name="not_ready">尚未就绪</string>
+    <string name="needs_pcapdroid">本应用通过免费抓包应用 PCAPdroid 读取游戏的网络通信。请先从 Google Play 安装它，然后再次点击“开始”。</string>
+    <string name="needs_game">这部手机上没有安装崩坏：星穹铁道。</string>
+    <string name="pcapdroid_refused">PCAPdroid 没有开始抓包。请点击“开始”并允许。</string>
+    <string name="footnote">PCAPdroid 只抓取崩坏：星穹铁道的网络通信，数据不会离开这部手机。运行期间，Android 会显示一个钥匙图标。</string>
+</resources>

@@ -199,6 +199,28 @@ at build time). Sign the newer one with `nri-release sign --public <test public 
 `core/src/export` is vendored rather than used as a dependency because the archiver's build script links its
 own icon and version details into anything that depends on it.
 
+## Android (in development)
+
+`android/` is the importer for a phone, built on [PCAPdroid](https://github.com/emanuele-f/PCAPdroid), which
+captures one app's traffic through Android's VPN service with no root. Start asks PCAPdroid, through its
+control API, to capture only the game and stream it to the app (its TCP exporter, `live/src/collector.rs`),
+then opens the game. Everything after that is the desktop app's `live/` crate: the same decoder, the same
+saved account, and the same page socket on `127.0.0.1:23314` for StarRailSim open in the phone's browser. The
+account can also leave through the share sheet as the archiver's export, which the site imports. The engine is
+`android/engine` (Rust, two JNI calls); the app around it is plain Java with no libraries.
+
+Building needs the Android SDK with NDK r28c, JDK 17 or newer, `cargo install cargo-ndk` and the targets
+`aarch64-linux-android` and `x86_64-linux-android`. Point `android/local.properties` at the SDK
+(`sdk.dir=...`), then:
+
+```
+cd android
+./gradlew assembleDebug --max-workers=2
+```
+
+The Gradle build runs cargo-ndk for arm64 phones and the x86_64 emulator first (`-PcargoJobs=` sets its jobs).
+`cargo test -p sync-live` and `cargo test -p nri-android` cover the collector and the engine without a phone.
+
 ## The capture-file decoder
 
 `decoder/` is the same decoding for a browser: it reads a capture of the game logging in (pcap or pcapng, from

@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Local sockets only: PCAPdroid's capture in, StarRailSim pages out, both on 127.0.0.1. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <queries>
+        <package android:name="com.emanuelef.remote_capture" />
+        <package android:name="com.HoYoverse.hkrpgoversea" />
+        <package android:name="com.miHoYo.hkrpg" />
+        <package android:name="com.miHoYo.hkrpg.bilibili" />
+    </queries>
+
+    <application
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Importer">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name=".ImportService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Receives PCAPdroid's capture of the game over a local socket and serves the account to StarRailSim while the game is in front" />
+        </service>
+
+        <provider
+            android:name=".AccountProvider"
+            android:authorities="com.starrailsim.importer.account"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+    </application>
+</manifest>

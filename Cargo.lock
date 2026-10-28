@@ -2002,6 +2002,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "nri-android"
+version = "0.1.0"
+dependencies = [
+ "jni",
+ "serde_json",
+ "sync-live",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "nri-release"
 version = "0.1.0"
 dependencies = [

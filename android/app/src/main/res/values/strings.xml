@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The status lines are the desktop app's (src/view.rs), with its translations (src/i18n.rs). -->
+<resources>
+    <string name="app_name" translatable="false">Nous Relic Importer</string>
+    <string name="channel">Import</string>
+    <string name="start">Start</string>
+    <string name="stop">Stop</string>
+    <string name="open_site">Open StarRailSim</string>
+    <string name="share">Share account file</string>
+    <string name="ready">Ready to import</string>
+    <string name="ready_detail">Tap Start. PCAPdroid starts reading the game\'s traffic and the game opens: log in and your account loads here.</string>
+    <string name="waiting">Waiting for the game</string>
+    <string name="waiting_detail">Start Honkai: Star Rail and click to start. If you are already in game, log out and back in.</string>
+    <string name="game_found">Game found</string>
+    <string name="game_found_detail">Log in and your account loads here.</string>
+    <string name="logging_in">Loading your account…</string>
+    <string name="relog">Log out and back in</string>
+    <string name="relog_detail">The game was already running when the capture started, so it missed the login. Log out to the start screen and back in. If the game just updated, this app may need an update too.</string>
+    <string name="synced_relics">Synced %1$s relics</string>
+    <string name="synced_saved">Saved from your last session. Tap Start and log in to bring it up to date.</string>
+    <string name="synced_capture_off">The capture is off. Share the account file to import it on another device, or tap Start to bring it up to date.</string>
+    <string name="synced_open_site">Open StarRailSim on this phone to load them, or share the account file to import it on another device.</string>
+    <string name="synced_up_to_date">StarRailSim is up to date. Changes you make in game show up there as they happen.</string>
+    <string name="not_working">Not working</string>
+    <string name="not_working_detail">%1$s. Close the app and open it again.</string>
+    <string name="not_ready">Not ready yet</string>
+    <string name="needs_pcapdroid">This app reads the game\'s traffic through PCAPdroid, a free capture app. Install it from Google Play, then tap Start again.</string>
+    <string name="needs_game">Honkai: Star Rail is not installed on this phone.</string>
+    <string name="pcapdroid_refused">PCAPdroid did not start the capture. Tap Start and allow it.</string>
+    <string name="footnote">PCAPdroid captures only Honkai: Star Rail\'s traffic, and it never leaves this phone. Android shows a key icon while it runs.</string>
+</resources>

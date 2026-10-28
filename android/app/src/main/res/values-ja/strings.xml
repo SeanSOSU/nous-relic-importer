@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="channel">インポート</string>
+    <string name="start">開始</string>
+    <string name="stop">停止</string>
+    <string name="open_site">StarRailSimを開く</string>
+    <string name="share">アカウントファイルを共有</string>
+    <string name="ready">インポートの準備ができました</string>
+    <string name="ready_detail">「開始」をタップすると、PCAPdroidがゲームの通信を読み取り始め、ゲームが起動します。ログインすると、アカウントがここに読み込まれます。</string>
+    <string name="waiting">ゲームを待っています</string>
+    <string name="waiting_detail">崩壊：スターレイルを起動し、スタート画面でクリックして開始します。すでにゲーム内にいる場合は、一度ログアウトしてからログインし直してください。</string>
+    <string name="game_found">ゲームを検出しました</string>
+    <string name="game_found_detail">ログインすると、アカウントがここに読み込まれます。</string>
+    <string name="logging_in">アカウントを読み込み中…</string>
+    <string name="relog">ログアウトしてログインし直してください</string>
+    <string name="relog_detail">キャプチャを始めたときにはゲームがすでに起動していたため、ログインを読み取れませんでした。スタート画面までログアウトしてから、もう一度ログインしてください。ゲームが更新された直後の場合は、このアプリの更新も必要かもしれません。</string>
+    <string name="synced_relics">遺物%1$s個を同期しました</string>
+    <string name="synced_saved">前回のセッションで保存したものです。「開始」をタップしてログインすると最新になります。</string>
+    <string name="synced_capture_off">キャプチャはオフです。アカウントファイルを共有すると別の端末でインポートできます。「開始」をタップすると最新になります。</string>
+    <string name="synced_open_site">このスマホでStarRailSimを開いて読み込むか、アカウントファイルを共有して別の端末でインポートしましょう。</string>
+    <string name="synced_up_to_date">StarRailSimは最新です。ゲーム内の変更はその場で反映されます。</string>
+    <string name="not_working">動作していません</string>
+    <string name="not_working_detail">%1$s。アプリを閉じてから、もう一度開いてください。</string>
+    <string name="not_ready">まだ準備ができていません</string>
+    <string name="needs_pcapdroid">このアプリは、無料のキャプチャアプリPCAPdroidを通してゲームの通信を読み取ります。Google Playからインストールしてから、もう一度「開始」をタップしてください。</string>
+    <string name="needs_game">このスマホには崩壊：スターレイルがインストールされていません。</string>
+    <string name="pcapdroid_refused">PCAPdroidがキャプチャを開始しませんでした。「開始」をタップして許可してください。</string>
+    <string name="footnote">PCAPdroidがキャプチャするのは崩壊：スターレイルの通信だけで、このスマホの外には出ません。実行中、Androidには鍵のアイコンが表示されます。</string>
+</resources>
