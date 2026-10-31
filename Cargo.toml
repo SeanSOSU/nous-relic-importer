@@ -65,3 +65,8 @@ overflow-checks = false
 opt-level = "s"
 lto = true
 overflow-checks = false
+
+# pktmon with this app's own capture session names, so it and Reliquary Archiver stop closing each other's
+# (vendor/pktmon/VENDORED).
+[patch.crates-io]
+pktmon = { path = "vendor/pktmon" }

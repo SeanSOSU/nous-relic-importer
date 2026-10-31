@@ -1,0 +1,43 @@
+[workspace]
+resolver = "2"
+members = [".", "examples/*"]
+default-members = ["."]
+
+[package]
+name = "pktmon"
+version = "0.6.2"
+description = "A library for capturing network packets on Windows using the PktMon service"
+license = "MIT"
+authors = ["emmachase <me@its-em.ma>"]
+repository = "https://github.com/emmachase/pktmon"
+documentation = "https://docs.rs/pktmon/latest/x86_64-pc-windows-msvc/pktmon/"
+readme = "README.md"
+keywords = ["pktmon", "network", "capture", "windows", "sniffer"]
+categories = ["api-bindings", "network-programming", "os", "os::windows-apis"]
+
+edition = "2024"
+
+[dependencies]
+cidr = "0.2.3"
+log = "0.4.25"
+futures = { version = "0.3.31", optional = true }
+tokio = { version = "1.45.0", features = ["full"], optional = true }
+
+windows = { version = "0.48", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_System_Services",
+    "Win32_Storage_FileSystem",
+    "Win32_System_IO",
+    "Win32_System_Time",
+    "Win32_System_Console",
+    "Win32_System_Diagnostics_Etw",
+    "Win32_System_LibraryLoader",
+] }
+async-stream = "0.3.6"
+
+[dev-dependencies]
+utf16string = "0.2.0"
+
+[features]
+tokio = ["dep:futures", "dep:tokio"]

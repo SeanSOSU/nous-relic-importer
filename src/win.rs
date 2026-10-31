@@ -229,30 +229,29 @@ pub fn remove_uninstall_entry() {
     unsafe { RegDeleteTreeW(HKEY_CURRENT_USER, path.as_ptr()) };
 }
 
-/// Whether Honkai: Star Rail's client is running.
-pub fn game_running() -> bool {
+/// The running processes' file names, lowercased.
+pub fn process_names() -> Vec<String> {
     use windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE;
     use windows_sys::Win32::System::Diagnostics::ToolHelp::{
         CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW, TH32CS_SNAPPROCESS,
     };
-    const GAME: &str = "StarRail.exe";
+    let mut names = Vec::new();
     unsafe {
         let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
         if snapshot == INVALID_HANDLE_VALUE {
-            return false;
+            return names;
         }
         let mut entry: PROCESSENTRY32W = std::mem::zeroed();
         entry.dwSize = size_of::<PROCESSENTRY32W>() as u32;
-        let mut found = false;
         let mut more = Process32FirstW(snapshot, &mut entry) != 0;
-        while more && !found {
+        while more {
             let name = &entry.szExeFile[..entry.szExeFile.iter().position(|&c| c == 0).unwrap_or(entry.szExeFile.len())];
-            found = String::from_utf16_lossy(name).eq_ignore_ascii_case(GAME);
+            names.push(String::from_utf16_lossy(name).to_lowercase());
             more = Process32NextW(snapshot, &mut entry) != 0;
         }
         CloseHandle(snapshot);
-        found
     }
+    names
 }
 
 pub fn lower_priority() {

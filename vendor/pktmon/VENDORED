@@ -1,0 +1,11 @@
+Copied from pktmon 0.6.2 on crates.io (https://github.com/emmachase/pktmon, MIT, see LICENSE), patched in through
+[patch.crates-io] in the workspace Cargo.toml. Changed, each marked "Nous Relic Importer" in the source:
+
+- src/legacy/etw.rs: its own ETW session name and GUID (upstream: "PktMon-Consumer"). Every app on this crate
+  shares upstream's, and each one's start closes the session of that name, so on Windows 10 starting Reliquary
+  Archiver silenced this app and the other way round.
+- src/realtime/mod.rs: its own live session name (upstream: "PktMon Rust").
+- src/lib.rs: Capture::new_legacy(), the Windows 10 backend on any Windows, for testing it on Windows 11.
+- src/realtime/c_api.rs: extern "system" for upstream's "stdcall", the same ABI on x64 without a warning per line.
+
+Moving to a newer pktmon: copy it here again and carry these changes over.
