@@ -60,6 +60,11 @@ pub fn describe(status: &Status, clients: usize, sending: bool) -> (String, Stri
             "Start Honkai: Star Rail and click to start. If you are already in game, log out and back in.",
             Tone::Idle,
         ),
+        Status::GameUnseen => (
+            t("Can't see the game").into(),
+            "Honkai: Star Rail is running, but none of its connection has reached this app. If you are past the start screen, a VPN or ping booster may be hiding it: pause it or leave the game out of it, then log out and back in.",
+            Tone::Warn,
+        ),
         Status::GameFound => (t("Game found").into(), "Log in and your account loads here.", Tone::Idle),
         Status::LoggingIn => (t("Loading your account…").into(), "", Tone::Idle),
         Status::NeedsRelogin => (

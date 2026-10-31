@@ -59,14 +59,28 @@ async fn upgrade(ws: WebSocketUpgrade, headers: HeaderMap, State(state): State<S
 async fn client(mut socket: WebSocket, hub: Hub) {
     let (snapshot, mut frames) = hub.subscribe();
     let mut sending = hub.sending();
+    // The app's own state goes to the page too, so it can say why no account has arrived yet.
+    let mut status = hub.status();
     hub.client_joined();
+    let state = status.borrow_and_update().page_frame();
     let first = if *sending.borrow_and_update() { snapshot } else { Some(Frame::from(PAUSED)) };
-    let mut open = match first {
-        Some(frame) => socket.send(Message::Text(frame.as_ref().into())).await.is_ok(),
-        None => true,
-    };
+    let mut open = socket.send(Message::Text(state.as_ref().into())).await.is_ok();
+    if let (true, Some(frame)) = (open, first) {
+        open = socket.send(Message::Text(frame.as_ref().into())).await.is_ok();
+    }
     while open {
         let frame = tokio::select! {
+            changed = status.changed() => match changed {
+                // Paused, the page keeps saying so.
+                Ok(()) => {
+                    let frame = status.borrow_and_update().page_frame();
+                    if !*sending.borrow() {
+                        continue;
+                    }
+                    Some(frame)
+                }
+                Err(_) => break,
+            },
             frame = frames.recv() => match frame {
                 Ok(_) if !*sending.borrow() => continue,
                 Ok(frame) => Some(frame),
@@ -76,8 +90,9 @@ async fn client(mut socket: WebSocket, hub: Hub) {
                 Err(broadcast::error::RecvError::Closed) => break,
             },
             changed = sending.changed() => match changed {
-                // Back on: the account as it is now covers whatever changed while it was off.
-                Ok(()) if *sending.borrow_and_update() => hub.snapshot(),
+                // Back on: the account as it is now covers whatever changed while it was off. With none yet,
+                // the state, or the page would go on saying paused.
+                Ok(()) if *sending.borrow_and_update() => hub.snapshot().or_else(|| Some(status.borrow().page_frame())),
                 Ok(()) => Some(Frame::from(PAUSED)),
                 Err(_) => break,
             },

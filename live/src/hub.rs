@@ -18,6 +18,9 @@ pub enum Status {
     Starting,
     Failed(String),
     WaitingForGame,
+    /// The game is running but none of its traffic reaches the capture: a VPN or ping booster can carry it
+    /// past where the packet monitor looks.
+    GameUnseen,
     /// The game opened its connection; the login that carries the account has not arrived yet.
     GameFound,
     LoggingIn,
@@ -26,6 +29,35 @@ pub enum Status {
     /// `at` is when the account last changed, in milliseconds since the Unix epoch. `fresh` is false for the
     /// copy loaded from disk at start, until a login in this session replaces it.
     Synced { relics: usize, uid: Option<u32>, at: u64, fresh: bool },
+}
+
+impl Status {
+    pub fn name(&self) -> &'static str {
+        match self {
+            Status::Starting => "starting",
+            Status::Failed(_) => "failed",
+            Status::WaitingForGame => "waiting",
+            Status::GameUnseen => "unseen",
+            Status::GameFound => "gameFound",
+            Status::LoggingIn => "loggingIn",
+            Status::NeedsRelogin => "needsRelogin",
+            Status::Synced { .. } => "synced",
+        }
+    }
+
+    /// The state as a page is told it, so it can say what to do next. A failure carries only its kind and OS
+    /// error code: its message can name a folder.
+    pub fn page_frame(&self) -> Frame {
+        let reason = match self {
+            Status::Failed(why) if why.starts_with("port ") => r#","reason":"port""#.to_owned(),
+            Status::Failed(why) => match why.rsplit_once("(os error ").and_then(|(_, code)| code.trim_end_matches(')').parse::<i32>().ok()) {
+                Some(code) => format!(r#","reason":"capture","code":{code}"#),
+                None => r#","reason":"capture""#.to_owned(),
+            },
+            _ => String::new(),
+        };
+        Frame::from(format!(r#"{{"event":"Status","data":{{"state":"{}"{reason}}}}}"#, self.name()))
+    }
 }
 
 fn now_ms() -> u64 {
@@ -290,6 +322,19 @@ impl Hub {
 #[cfg(test)]
 mod tests {
     use super::{Hub, Status};
+
+    #[test]
+    fn a_page_hears_the_state_but_never_a_failures_wording() {
+        let frame = |status: Status| serde_json::from_str::<serde_json::Value>(&status.page_frame()).unwrap();
+        assert_eq!(frame(Status::GameUnseen), serde_json::json!({"event": "Status", "data": {"state": "unseen"}}));
+        assert_eq!(
+            frame(Status::Failed(r"Access is denied. (os error 5)".into()))["data"],
+            serde_json::json!({"state": "failed", "reason": "capture", "code": 5})
+        );
+        assert_eq!(frame(Status::Failed("port 23314 is in use".into()))["data"], serde_json::json!({"state": "failed", "reason": "port"}));
+        let read = frame(Status::Failed(r"could not read C:\Users\Someone\export.json".into()));
+        assert_eq!(read["data"], serde_json::json!({"state": "failed", "reason": "capture"}));
+    }
 
     #[test]
     fn a_page_starts_from_the_snapshot_and_then_follows_the_frames() {

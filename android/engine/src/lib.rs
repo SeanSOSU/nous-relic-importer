@@ -139,13 +139,8 @@ impl Engine {
     fn status(&self) -> serde_json::Value {
         let current = self.hub.status().borrow().clone();
         let (state, detail) = match &current {
-            Status::Starting => ("starting", None),
-            Status::Failed(reason) => ("failed", Some(reason.clone())),
-            Status::WaitingForGame => ("waiting", None),
-            Status::GameFound => ("gameFound", None),
-            Status::LoggingIn => ("loggingIn", None),
-            Status::NeedsRelogin => ("needsRelogin", None),
-            Status::Synced { .. } => ("synced", None),
+            Status::Failed(reason) => (current.name(), Some(reason.clone())),
+            _ => (current.name(), None),
         };
         let at = match current {
             Status::Synced { at, fresh, .. } => Some((at, fresh)),

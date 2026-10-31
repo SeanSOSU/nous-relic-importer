@@ -1,0 +1,4 @@
+# The Windows build carries its own C runtime: without it, a PC lacking the Visual C++ Redistributable could not
+# start the app at all (VCRUNTIME140.dll / VCRUNTIME140_1.dll not found).
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

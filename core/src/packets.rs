@@ -83,11 +83,30 @@ fn by_version(ip: &[u8]) -> Option<(u16, &[u8])> {
     }
 }
 
+/// The IP packet inside an unencrypted 802.11 data frame: after its MAC header and LLC/SNAP header.
+fn ip_in_wifi(frame: &[u8]) -> Option<(u16, &[u8])> {
+    let (control, flags) = (*frame.first()?, *frame.get(1)?);
+    if (control >> 2) & 3 != 2 || flags & 0x40 != 0 {
+        return None;
+    }
+    let qos = control & 0x80 != 0;
+    let header = 24 + if flags & 3 == 3 { 6 } else { 0 } + if qos { 2 } else { 0 } + if qos && flags & 0x80 != 0 { 4 } else { 0 };
+    let snap = frame.get(header..header + 8)?;
+    if snap[..6] != [0xaa, 0xaa, 0x03, 0, 0, 0] {
+        return None;
+    }
+    match u16::from_be_bytes([snap[6], snap[7]]) {
+        ethertype @ (0x0800 | 0x86dd) => Some((ethertype, &frame[header + 8..])),
+        _ => None,
+    }
+}
+
 /// The IP packet inside a captured frame, with its EtherType.
 pub fn ip_packet(link: u32, data: &[u8]) -> Option<(u16, &[u8])> {
     match link {
         // Ethernet, possibly VLAN-tagged.
         1 => ip_in_ethernet(data),
+        105 => ip_in_wifi(data),
         // Raw IP: PCAPdroid on Android, macOS rvictl and many tcpdump captures.
         12 | 14 | 101 => by_version(data),
         228 => Some((0x0800, data)),
@@ -185,5 +204,16 @@ mod tests {
             assert_eq!(ip_packet(link, &frame), Some((0x0800, &IPV4[..])), "link type {link}");
         }
         assert_eq!(ip_packet(147, &IPV4), None, "an unknown link type is skipped, not guessed at");
+    }
+
+    #[test]
+    fn a_wifi_data_frame_unwraps_after_its_llc_header() {
+        const SNAP: [u8; 8] = [0xaa, 0xaa, 0x03, 0, 0, 0, 0x08, 0x00];
+        let frame = |control: u8, flags: u8, extra: usize| [&[control, flags][..], &[0; 22], &vec![0; extra], &SNAP, &IPV4].concat();
+        assert_eq!(ip_packet(105, &frame(0x08, 0x01, 0)), Some((0x0800, &IPV4[..])), "plain data, to the access point");
+        assert_eq!(ip_packet(105, &frame(0x88, 0x02, 2)), Some((0x0800, &IPV4[..])), "QoS data, from it");
+        assert_eq!(ip_packet(105, &frame(0x88, 0x83, 12)), Some((0x0800, &IPV4[..])), "QoS, four addresses, HT control");
+        assert_eq!(ip_packet(105, &frame(0x08, 0x41, 0)), None, "an encrypted body is not read");
+        assert_eq!(ip_packet(105, &frame(0x80, 0x00, 0)), None, "a beacon carries no packet");
     }
 }

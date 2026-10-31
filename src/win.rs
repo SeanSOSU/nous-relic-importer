@@ -229,6 +229,32 @@ pub fn remove_uninstall_entry() {
     unsafe { RegDeleteTreeW(HKEY_CURRENT_USER, path.as_ptr()) };
 }
 
+/// Whether Honkai: Star Rail's client is running.
+pub fn game_running() -> bool {
+    use windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE;
+    use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW, TH32CS_SNAPPROCESS,
+    };
+    const GAME: &str = "StarRail.exe";
+    unsafe {
+        let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        if snapshot == INVALID_HANDLE_VALUE {
+            return false;
+        }
+        let mut entry: PROCESSENTRY32W = std::mem::zeroed();
+        entry.dwSize = size_of::<PROCESSENTRY32W>() as u32;
+        let mut found = false;
+        let mut more = Process32FirstW(snapshot, &mut entry) != 0;
+        while more && !found {
+            let name = &entry.szExeFile[..entry.szExeFile.iter().position(|&c| c == 0).unwrap_or(entry.szExeFile.len())];
+            found = String::from_utf16_lossy(name).eq_ignore_ascii_case(GAME);
+            more = Process32NextW(snapshot, &mut entry) != 0;
+        }
+        CloseHandle(snapshot);
+        found
+    }
+}
+
 pub fn lower_priority() {
     use windows_sys::Win32::System::Threading::{BELOW_NORMAL_PRIORITY_CLASS, SetPriorityClass};
     unsafe { SetPriorityClass(GetCurrentProcess(), BELOW_NORMAL_PRIORITY_CLASS) };

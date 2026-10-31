@@ -165,6 +165,15 @@ const TABLE: &[(&str, [&str; 3])] = &[
             "启动崩坏：星穹铁道并点击开始。如果你已经在游戏中，请先登出再重新登录。",
         ],
     ),
+    ("Can't see the game", ["ゲームを検出できません", "게임을 감지할 수 없습니다", "检测不到游戏"]),
+    (
+        "Honkai: Star Rail is running, but none of its connection has reached this app. If you are past the start screen, a VPN or ping booster may be hiding it: pause it or leave the game out of it, then log out and back in.",
+        [
+            "崩壊：スターレイルは起動していますが、その通信がまだこのアプリに届いていません。スタート画面より先に進んでいる場合は、VPNや通信加速ツールが隠している可能性があります。一時停止するか対象からゲームを外してから、ログアウトしてログインし直してください。",
+            "붕괴: 스타레일이 실행 중이지만 그 연결이 아직 이 앱에 닿지 않았습니다. 시작 화면을 지났다면 VPN이나 핑 부스터가 가리고 있을 수 있습니다. 일시 중지하거나 게임을 대상에서 뺀 뒤, 로그아웃 후 다시 로그인하세요.",
+            "崩坏：星穹铁道正在运行，但它的连接还没有到达本应用。如果你已经过了开始界面，可能是 VPN 或加速器将其隐藏了：请暂停它或将游戏排除在外，然后登出并重新登录。",
+        ],
+    ),
     ("Game found", ["ゲームを検出しました", "게임을 찾았습니다", "已找到游戏"]),
     (
         "Log in and your account loads here.",

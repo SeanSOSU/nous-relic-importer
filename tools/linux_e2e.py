@@ -103,6 +103,8 @@ def main():
         s, status = connect(args[0], args[1])
         assert status == 101, f"status {status}"
         message = json.loads(receive(s))
+        while message["event"] == "Status":  # the app's own state comes before the account
+            message = json.loads(receive(s))
         data = message["data"]
         print(json.dumps({
             "event": message["event"],
@@ -163,7 +165,8 @@ def main():
                 continue
             data = message.get("data")
             relics = f":{len(data.get('relics', []))}" if isinstance(data, dict) and "relics" in data else ""
-            print(message.get("event") + relics, flush=True)
+            state = f":{data.get('state')}" if message.get("event") == "Status" else ""
+            print(message.get("event") + relics + state, flush=True)
     else:
         sys.exit(f"unknown command {command}")
 

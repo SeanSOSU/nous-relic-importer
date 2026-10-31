@@ -68,7 +68,7 @@ EVENTS=$!
 sleep 1
 $E2E window "ws://127.0.0.1:23314/ui?token=$TOKEN" http://127.0.0.1:23314 sending-off sending-on | tee /tmp/sending.json
 wait $EVENTS
-[ "$(tr '\n' ' ' < /tmp/events.txt)" = "InitialScan:558 Paused InitialScan:558 " ] || fail "the page saw: $(tr '\n' ' ' < /tmp/events.txt)"
+[ "$(tr '\n' ' ' < /tmp/events.txt)" = "Status:synced InitialScan:558 Paused InitialScan:558 " ] || fail "the page saw: $(tr '\n' ' ' < /tmp/events.txt)"
 grep -q '"sending": false.*Auto import is off\|Auto import is off.*"sending": false' /tmp/sending.json \
   || fail "the window does not say sending is off"
 grep -q '"sendToSite":true' "$H/.local/state/nous-relic-importer/settings.json" || fail "the switch was not kept for the next start"
