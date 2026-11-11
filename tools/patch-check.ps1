@@ -1,7 +1,9 @@
 # The weekly check for a game patch. When Reliquary (IceDynamix/reliquary) has a tag newer than the one main builds
-# on, it prepares the update on a local branch, reliquary-<tag>, in a worktree beside the repo (<repo>-patch): it runs
-# tools/update-reliquary.ps1, raises the patch version, runs `cargo test --workspace` and `cargo build --release`, and
-# commits whatever they said. It reports with a Windows notification and target/patch-check/reliquary-<tag>.md, and
+# on, or TurnBasedGameData (the game tables core/build.rs compiles in) has a commit newer than the one main's
+# core/gamedata.rev pins, it prepares the update on a local branch in a worktree beside the repo (<repo>-patch):
+# reliquary-<tag> when the protocol moved (tools/update-reliquary.ps1, and the newest game data with it), otherwise
+# gamedata-<commit>. It raises the patch version, runs `cargo test --workspace` and `cargo build --release`, and
+# commits whatever they said. It reports with a Windows notification and target/patch-check/<branch>.md, and
 # logs every run in target/patch-check/patch-check.log. It never pushes and never publishes.
 #
 #   .\tools\patch-check.ps1 -DryRun                            # what it would do now
@@ -109,27 +111,37 @@ try {
     $current = [regex]::Match($manifest, '(?m)^reliquary = \{[^}]*?\btag = "([^"]+)"').Groups[1].Value
     $package = ([regex]'(?m)^version = "(\d+\.\d+)\.(\d+)"').Match($manifest, $manifest.IndexOf("[package]"))
     if (-not $current -or -not $package.Success) { throw "main's Cargo.toml has no reliquary tag or no plain version" }
+    $pinned = (((Invoke-Git -C $repo show main:core/gamedata.rev) -join "`n").Trim() -split '\s+')[0]
+    if ($pinned -notmatch '^[0-9a-f]{40}$') { throw "main's core/gamedata.rev does not start with a commit id" }
     $newest = gh api --paginate repos/IceDynamix/reliquary/tags --jq '.[].name' |
         Where-Object { Get-Version $_ } | Sort-Object { Get-Version $_ } | Select-Object -Last 1
     if ($LASTEXITCODE -or -not $newest) { throw "gh could not list Reliquary's tags" }
-    if ((Get-Version $newest) -le (Get-Version $current)) {
-        Write-Log "Up to date: main builds on reliquary $current, the newest tag."
+    $data = @(Invoke-RestMethod -UseBasicParsing -TimeoutSec 60 `
+        "https://gitlab.com/api/v4/projects/Dimbreath%2Fturnbasedgamedata/repository/commits?ref_name=main&per_page=1")[0]
+    if ($data.id -notmatch '^[0-9a-f]{40}$') { throw "GitLab did not name TurnBasedGameData's newest commit" }
+    $protocol = (Get-Version $newest) -gt (Get-Version $current)
+    $tables = $data.id -ne $pinned
+    if (-not $protocol -and -not $tables) {
+        Write-Log "Up to date: main builds on reliquary $current and game data $($pinned.Substring(0, 8)), the newest of each."
         return
     }
-    $branch = "reliquary-$newest"
+    $moves = @()
+    if ($protocol) { $moves += "reliquary $current -> $newest" }
+    if ($tables) { $moves += "game data $($pinned.Substring(0, 8)) -> $($data.short_id) ($($data.title))" }
+    $branch = if ($protocol) { "reliquary-$newest" } else { "gamedata-$($data.short_id)" }
     git -C $repo rev-parse --verify --quiet "refs/heads/$branch" | Out-Null
     if (-not $LASTEXITCODE) {
-        Write-Log "reliquary $newest is already prepared on branch $branch."
+        Write-Log "$($moves -join ' and ') is already prepared on branch $branch."
         return
     }
     $version ="$($package.Groups[1].Value).$($package.Groups[2].Value)"
     $next = "$($package.Groups[1].Value).$([int]$package.Groups[2].Value + 1)"
     if ($DryRun) {
-        Write-Log "Would prepare branch $branch in ${Worktree}: reliquary $current -> $newest, version $version -> $next, then cargo test and the release build."
+        Write-Log "Would prepare branch $branch in ${Worktree}: $($moves -join ', '), version $version -> $next, then cargo test and the release build."
         return
     }
 
-    Write-Log "reliquary $newest is out (main builds on $current): preparing branch $branch in $Worktree."
+    Write-Log "$($moves -join ' and '): preparing branch $branch in $Worktree."
     if (Test-Path $Worktree) {
         if (Invoke-Git -C $Worktree status --porcelain) { throw "$Worktree has uncommitted changes: commit or discard them, and the next check prepares $branch." }
         Invoke-Git -C $Worktree switch --quiet --detach main
@@ -137,15 +149,19 @@ try {
         Invoke-Git -C $repo worktree prune
         Invoke-Git -C $repo worktree add --quiet --detach $Worktree main
     }
-    try {
-        $said = & (Join-Path $Worktree "tools\update-reliquary.ps1") -Reliquary $newest *>&1 |
-            ForEach-Object { if ($_ -is [Management.Automation.WarningRecord]) { "WARNING: $_" } else { "$_" } }
-    } catch {
-        # This run's own changes, in a worktree that was clean: the next check starts over.
-        git -C $Worktree reset --quiet --hard
-        git -C $Worktree clean --quiet -d --force
-        throw "tools/update-reliquary.ps1 could not move to reliquary ${newest}: $_"
+    $said = @()
+    if ($protocol) {
+        try {
+            $said = & (Join-Path $Worktree "tools\update-reliquary.ps1") -Reliquary $newest *>&1 |
+                ForEach-Object { if ($_ -is [Management.Automation.WarningRecord]) { "WARNING: $_" } else { "$_" } }
+        } catch {
+            # This run's own changes, in a worktree that was clean: the next check starts over.
+            git -C $Worktree reset --quiet --hard
+            git -C $Worktree clean --quiet -d --force
+            throw "tools/update-reliquary.ps1 could not move to reliquary ${newest}: $_"
+        }
     }
+    if ($tables) { [IO.File]::WriteAllText((Join-Path $Worktree "core\gamedata.rev"), "$($data.id) $($data.title)`n") }
     $cargoToml = Join-Path $Worktree "Cargo.toml"
     $text = [IO.File]::ReadAllText($cargoToml)
     [IO.File]::WriteAllText($cargoToml, ([regex]'(?m)^version = "[^"]*"').Replace($text, "version = `"$next`"", 1, $text.IndexOf("[package]")))
@@ -155,14 +171,15 @@ try {
     $tests = Get-Verdict (Invoke-Cargo "test --workspace --no-fail-fast -j $Jobs -- --test-threads $Jobs" $testLog) $testLog
     $build = Get-Verdict (Invoke-Cargo "build --release -j $Jobs" $buildLog) $buildLog
     $results = @(
-        "- reliquary $current -> $newest; version $version -> $next"
+        "- $($moves -join '; '); version $version -> $next"
         "- cargo test --workspace: $tests"
         "- cargo build --release: $build"
     )
+    $said = if ($protocol) { @("", "tools/update-reliquary.ps1 said:", "") + ($said | ForEach-Object { "    $_" }) } else { @() }
+    $title = if ($protocol) { "Protocol: reliquary $newest" } else { "Game data: $($data.title)" }
     $message = Join-Path $out "$branch-commit.txt"
-    [IO.File]::WriteAllText($message, ((@("Protocol: reliquary $newest, version $next", "",
-        "Prepared by tools/patch-check.ps1, which never pushes:") + $results + "" + "tools/update-reliquary.ps1 said:" +
-        ($said | ForEach-Object { "    $_" })) -join "`n") + "`n")
+    [IO.File]::WriteAllText($message, ((@("$title, version $next", "",
+        "Prepared by tools/patch-check.ps1, which never pushes:") + $results + $said) -join "`n") + "`n")
     Invoke-Git -C $Worktree switch --quiet --create $branch
     Invoke-Git -C $Worktree add --all
     Invoke-Git -C $Worktree commit --quiet --file $message
@@ -175,16 +192,16 @@ try {
         "on the new one (``--emulator --record``), put it in that file's place and set the counts its tests expect. "
     } else { "" }
     $report = Join-Path $out "$branch.md"
+    $news = if ($protocol) { "reliquary $newest is out" } else { "the game data moved to $($data.title)" }
     [IO.File]::WriteAllText($report, ((@(
-        "# reliquary $newest is out", "",
+        "# $news", "",
         "Prepared $(Get-Date -Format 'yyyy-MM-dd HH:mm') on branch ``$branch`` (commit $commit), checked out in $Worktree.",
         "Nothing was pushed or published.", "") + $results + @("",
-        "Logs: $testLog and $buildLog.", "",
-        "tools/update-reliquary.ps1 said:", "") + ($said | ForEach-Object { "    $_" }) + @("",
+        "Logs: $testLog and $buildLog.") + $said + @("",
         "Review it with ``git diff main $branch``. $($recording)Merge it into main and publish it as README.md's " +
         """Publishing a release"" says.")) -join "`n") + "`n")
     Write-Log "Prepared $branch ($commit). Tests: $tests. Release build: $build. Report: $report"
-    Send-Notification "Nous Relic Importer: reliquary $newest is out" "Branch $branch is prepared in $Worktree. Tests: $tests. Release build: $build." $report
+    Send-Notification "Nous Relic Importer: $news" "Branch $branch is prepared in $Worktree. Tests: $tests. Release build: $build." $report
 } catch {
     Write-Log "Failed: $_"
     if (-not $DryRun) { Send-Notification "Nous Relic Importer patch check failed" "$_" (Join-Path $out "patch-check.log") }

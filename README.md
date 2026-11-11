@@ -116,7 +116,10 @@ cargo build --release
 ```
 
 The build downloads the game's resource tables (through Reliquary Archiver's build script), so it needs network
-access.
+access. It downloads them from [TurnBasedGameData](https://gitlab.com/Dimbreath/turnbasedgamedata) at the commit
+`core/gamedata.rev` names (from GitLab, or from its GitHub mirror when GitLab refuses: it rate-limits unauthenticated
+downloads), so the same source always builds the same tables; changing that file is what makes a build download
+them again.
 
 Linux, in Docker (the image is the build environment and the test bench), from the repo:
 
@@ -144,13 +147,17 @@ to it. Once [Reliquary](https://github.com/IceDynamix/reliquary) has tagged the 
 3. The tests that replay `decoder/tests/emulator-login.pcap` fail on a new protocol, saying it needs a new emulator
    recording: record a PearlSR login on the new protocol (`--emulator --record`), put it in that file's place and set
    the counts its tests expect.
-4. Raise `version` in `Cargo.toml`, `cargo test --workspace`, the release builds, and publish them (below).
+4. Put TurnBasedGameData's newest commit in `core/gamedata.rev` (its id, then its title), so the new patch's
+   characters, light cones and relic sets are in the tables: the exporter leaves out any item they do not name.
+5. Raise `version` in `Cargo.toml`, `cargo test --workspace`, the release builds, and publish them (below).
    Installed copies pick the new version up within six hours.
 
 `tools/patch-check.ps1` prepares this by itself. When Reliquary has a tag newer than the one `main` builds on, it
-makes a local branch, `reliquary-<tag>`, in a worktree beside the repo (`<repo>-patch`): step 1, the next patch
-version, then `cargo test --workspace` and the Windows `cargo build --release` there, committed whatever they say. It
-reports with a Windows notification and `target/patch-check/reliquary-<tag>.md`, and never pushes or publishes.
+makes a local branch, `reliquary-<tag>`, in a worktree beside the repo (`<repo>-patch`): steps 1 and 4, the next patch
+version, then `cargo test --workspace` and the Windows `cargo build --release` there, committed whatever they say.
+When only TurnBasedGameData has moved past `main`'s `core/gamedata.rev` (the game's data can land before Reliquary's
+tag, and a hotfix can add items without one), it does the same with step 4 alone on a branch `gamedata-<commit>`. It
+reports with a Windows notification and `target/patch-check/<branch>.md`, and never pushes or publishes.
 `-DryRun` says what it would do. `-Register -Jobs 2 -Affinity FFFF0` makes it a weekly scheduled task for the
 signed-in user (Thursdays at 10:00, or as soon as it can after a missed one) whose cargo runs two jobs on the CPUs in
 that hex mask; `Start-ScheduledTask "Nous Relic Importer patch check"` runs it now. Each run adds a line to
