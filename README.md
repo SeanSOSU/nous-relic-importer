@@ -140,9 +140,10 @@ must both have the account; then it quits and uninstalls. The packet socket's ow
 to it. Once [Reliquary](https://github.com/IceDynamix/reliquary) has tagged the new protocol:
 
 1. `.\tools\update-reliquary.ps1` sets Reliquary's newest tag (or `-Reliquary <tag>`) on every `reliquary` entry:
-   `Cargo.toml`, `core/Cargo.toml` (dependency and build-dependency) and `decoder/Cargo.toml`, with Reliquary's own
-   `protobuf` version on the tests' one. It copies Reliquary Archiver's exporter into `core/src/export` again only
-   when the archiver has released a different one since `core/src/export/VENDORED`'s tag; most patches need none.
+   `Cargo.toml`, `core/Cargo.toml` (dependency and build-dependency), `decoder/Cargo.toml` and `live/Cargo.toml`,
+   with Reliquary's own `protobuf` version on the tests' one. It copies Reliquary Archiver's exporter into
+   `core/src/export` again only when the archiver has released a different one since `core/src/export/VENDORED`'s
+   tag; most patches need none.
 2. If the script warns that the archiver's `build.rs` changed, mirror its downloads in `core/build.rs`.
 3. The tests that replay `decoder/tests/emulator-login.pcap` fail on a new protocol, saying it needs a new emulator
    recording: record a PearlSR login on the new protocol (`--emulator --record`), put it in that file's place and set
