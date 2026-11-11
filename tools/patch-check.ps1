@@ -2,9 +2,11 @@
 # on, or TurnBasedGameData (the game tables core/build.rs compiles in) has a commit newer than the one main's
 # core/gamedata.rev pins, it prepares the update on a local branch in a worktree beside the repo (<repo>-patch):
 # reliquary-<tag> when the protocol moved (tools/update-reliquary.ps1, and the newest game data with it), otherwise
-# gamedata-<commit>. It raises the patch version, runs `cargo test --workspace` and `cargo build --release`, and
-# commits whatever they said. It reports with a Windows notification and target/patch-check/<branch>.md, and
-# logs every run in target/patch-check/patch-check.log. It never pushes and never publishes.
+# gamedata-<commit>. A move some branch already carries is not prepared again, so game data that moves after a
+# protocol branch was made gets a gamedata-<commit> of its own. It raises the patch version, runs
+# `cargo test --workspace` and `cargo build --release`, and commits whatever they said. It reports with a Windows
+# notification and target/patch-check/<branch>.md, and logs every run in target/patch-check/patch-check.log. It never
+# pushes and never publishes.
 #
 #   .\tools\patch-check.ps1 -DryRun                            # what it would do now
 #   .\tools\patch-check.ps1 -Register -Jobs 2 -Affinity FFFF0  # weekly, cargo with two jobs on CPUs 4-19 (a hex mask)
@@ -50,6 +52,17 @@ function Invoke-Git {
     $output = git @args
     if ($LASTEXITCODE) { throw "git $args failed" }
     $output
+}
+
+function Test-Branch([string]$Name) {
+    git -C $repo rev-parse --verify --quiet "refs/heads/$Name" | Out-Null
+    -not $LASTEXITCODE
+}
+
+# The TurnBasedGameData commit $Ref's core/gamedata.rev pins; nothing when it has no such file.
+function Get-Pin([string]$Ref) {
+    git -C $repo rev-parse --verify --quiet "${Ref}:core/gamedata.rev" | Out-Null
+    if (-not $LASTEXITCODE) { (((Invoke-Git -C $repo show "${Ref}:core/gamedata.rev") -join "`n").Trim() -split '\s+')[0] }
 }
 
 function Write-Log([string]$Line) {
@@ -111,7 +124,7 @@ try {
     $current = [regex]::Match($manifest, '(?m)^reliquary = \{[^}]*?\btag = "([^"]+)"').Groups[1].Value
     $package = ([regex]'(?m)^version = "(\d+\.\d+)\.(\d+)"').Match($manifest, $manifest.IndexOf("[package]"))
     if (-not $current -or -not $package.Success) { throw "main's Cargo.toml has no reliquary tag or no plain version" }
-    $pinned = (((Invoke-Git -C $repo show main:core/gamedata.rev) -join "`n").Trim() -split '\s+')[0]
+    $pinned = Get-Pin main
     if ($pinned -notmatch '^[0-9a-f]{40}$') { throw "main's core/gamedata.rev does not start with a commit id" }
     $newest = gh api --paginate repos/IceDynamix/reliquary/tags --jq '.[].name' |
         Where-Object { Get-Version $_ } | Sort-Object { Get-Version $_ } | Select-Object -Last 1
@@ -119,21 +132,33 @@ try {
     $data = @(Invoke-RestMethod -UseBasicParsing -TimeoutSec 60 `
         "https://gitlab.com/api/v4/projects/Dimbreath%2Fturnbasedgamedata/repository/commits?ref_name=main&per_page=1")[0]
     if ($data.id -notmatch '^[0-9a-f]{40}$') { throw "GitLab did not name TurnBasedGameData's newest commit" }
-    $protocol = (Get-Version $newest) -gt (Get-Version $current)
-    $tables = $data.id -ne $pinned
-    if (-not $protocol -and -not $tables) {
+    $protocolMoved = (Get-Version $newest) -gt (Get-Version $current)
+    $tablesMoved = $data.id -ne $pinned
+    if (-not $protocolMoved -and -not $tablesMoved) {
         Write-Log "Up to date: main builds on reliquary $current and game data $($pinned.Substring(0, 8)), the newest of each."
         return
     }
-    $moves = @()
-    if ($protocol) { $moves += "reliquary $current -> $newest" }
-    if ($tables) { $moves += "game data $($pinned.Substring(0, 8)) -> $($data.short_id) ($($data.title))" }
-    $branch = if ($protocol) { "reliquary-$newest" } else { "gamedata-$($data.short_id)" }
-    git -C $repo rev-parse --verify --quiet "refs/heads/$branch" | Out-Null
-    if (-not $LASTEXITCODE) {
-        Write-Log "$($moves -join ' and ') is already prepared on branch $branch."
+    $protocolMove = "reliquary $current -> $newest"
+    $tablesMove = "game data $($pinned.Substring(0, 8)) -> $($data.short_id) ($($data.title))"
+    # A move is prepared once a branch carries it: the protocol on reliquary-<tag>, the game data on a branch whose
+    # core/gamedata.rev pins it. A protocol branch made before the data moved leaves that move to gamedata-<commit>.
+    $protocolOn = if ($protocolMoved -and (Test-Branch "reliquary-$newest")) { "reliquary-$newest" }
+    $carriers = @("gamedata-$($data.short_id)") + @("reliquary-$newest" | Where-Object { $protocolMoved })
+    $tablesOn = if ($tablesMoved) { $carriers | Where-Object { (Test-Branch $_) -and (Get-Pin $_) -eq $data.id } | Select-Object -First 1 }
+    # What this run prepares: a new protocol carries the newest game data with it.
+    $protocol = $protocolMoved -and -not $protocolOn
+    $tables = $tablesMoved -and ($protocol -or -not $tablesOn)
+    if (-not $protocol -and -not $tables) {
+        $where = @()
+        if ($protocolOn) { $where += "$protocolMove on branch $protocolOn" }
+        if ($tablesOn) { $where += "$tablesMove on branch $tablesOn" }
+        Write-Log "Already prepared: $($where -join ' and ')."
         return
     }
+    $moves = @()
+    if ($protocol) { $moves += $protocolMove }
+    if ($tables) { $moves += $tablesMove }
+    $branch = if ($protocol) { "reliquary-$newest" } else { "gamedata-$($data.short_id)" }
     $version ="$($package.Groups[1].Value).$($package.Groups[2].Value)"
     $next = "$($package.Groups[1].Value).$([int]$package.Groups[2].Value + 1)"
     if ($DryRun) {

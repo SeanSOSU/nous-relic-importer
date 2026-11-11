@@ -156,8 +156,9 @@ to it. Once [Reliquary](https://github.com/IceDynamix/reliquary) has tagged the 
 `tools/patch-check.ps1` prepares this by itself. When Reliquary has a tag newer than the one `main` builds on, it
 makes a local branch, `reliquary-<tag>`, in a worktree beside the repo (`<repo>-patch`): steps 1 and 4, the next patch
 version, then `cargo test --workspace` and the Windows `cargo build --release` there, committed whatever they say.
-When only TurnBasedGameData has moved past `main`'s `core/gamedata.rev` (the game's data can land before Reliquary's
-tag, and a hotfix can add items without one), it does the same with step 4 alone on a branch `gamedata-<commit>`. It
+When TurnBasedGameData has moved past `main`'s `core/gamedata.rev` with no new Reliquary tag, or since that tag's branch
+was made (the game's data can land before Reliquary's tag, and a hotfix can add items without one), it does the same
+with step 4 alone on a branch `gamedata-<commit>`. It
 reports with a Windows notification and `target/patch-check/<branch>.md`, and never pushes or publishes.
 `-DryRun` says what it would do. `-Register -Jobs 2 -Affinity FFFF0` makes it a weekly scheduled task for the
 signed-in user (Thursdays at 10:00, or as soon as it can after a missed one) whose cargo runs two jobs on the CPUs in
