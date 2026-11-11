@@ -67,6 +67,11 @@ pub fn describe(status: &Status, clients: usize, sending: bool) -> (String, Stri
         ),
         Status::GameFound => (t("Game found").into(), "Log in and your account loads here.", Tone::Idle),
         Status::LoggingIn => (t("Loading your account…").into(), "", Tone::Idle),
+        Status::NeedsUpdate => (
+            t("Waiting for an update").into(),
+            "Honkai: Star Rail has updated, and this version can't read its login yet. The app updates itself as soon as support is out; logging out and back in won't help until then.",
+            Tone::Warn,
+        ),
         Status::NeedsRelogin => (
             t("Log out and back in").into(),
             "The game was already running when sync started, so it missed the login. Log out to the start screen and back in. If the game just updated, this app may need an update too.",

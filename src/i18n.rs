@@ -180,6 +180,15 @@ const TABLE: &[(&str, [&str; 3])] = &[
         ["ログインすると、アカウントがここに読み込まれます。", "로그인하면 계정이 여기에 불러와집니다.", "登录后，你的账号会载入这里。"],
     ),
     ("Loading your account…", ["アカウントを読み込み中…", "계정을 불러오는 중…", "正在载入你的账号…"]),
+    ("Waiting for an update", ["アップデートを待っています", "업데이트를 기다리는 중", "正在等待更新"]),
+    (
+        "Honkai: Star Rail has updated, and this version can't read its login yet. The app updates itself as soon as support is out; logging out and back in won't help until then.",
+        [
+            "崩壊：スターレイルが更新され、このバージョンではまだログインを読み取れません。対応が公開され次第、アプリは自動で更新されます。それまではログインし直しても解決しません。",
+            "붕괴: 스타레일이 업데이트되어 이 버전으로는 아직 로그인을 읽을 수 없습니다. 지원이 나오는 대로 앱이 자동으로 업데이트되며, 그 전까지는 다시 로그인해도 해결되지 않습니다.",
+            "崩坏：星穹铁道已更新，此版本暂时无法读取登录。支持发布后应用会自动更新，在此之前重新登录也无济于事。",
+        ],
+    ),
     ("Log out and back in", ["ログアウトしてログインし直してください", "로그아웃 후 다시 로그인하세요", "请登出后重新登录"]),
     (
         "The game was already running when sync started, so it missed the login. Log out to the start screen and back in. If the game just updated, this app may need an update too.",

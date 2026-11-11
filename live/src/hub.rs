@@ -26,6 +26,8 @@ pub enum Status {
     LoggingIn,
     /// Packets arrived that need a session key this app never saw: the game was already logged in.
     NeedsRelogin,
+    /// The login was seen but could not be read: the game updated to a protocol this build does not know.
+    NeedsUpdate,
     /// `at` is when the account last changed, in milliseconds since the Unix epoch. `fresh` is false for the
     /// copy loaded from disk at start, until a login in this session replaces it.
     Synced { relics: usize, uid: Option<u32>, at: u64, fresh: bool },
@@ -41,6 +43,7 @@ impl Status {
             Status::GameFound => "gameFound",
             Status::LoggingIn => "loggingIn",
             Status::NeedsRelogin => "needsRelogin",
+            Status::NeedsUpdate => "needsUpdate",
             Status::Synced { .. } => "synced",
         }
     }

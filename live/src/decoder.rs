@@ -19,6 +19,8 @@ pub struct Decoder {
     sniffer: GameSniffer,
     accounts: Accounts,
     tcp: HashMap<u16, TcpStream>,
+    // The game's connection was seen opening and has not closed since.
+    connected: bool,
 }
 
 impl Decoder {
@@ -47,7 +49,8 @@ impl Decoder {
 
     fn key_missing(&self, hub: &Hub) {
         if !self.accounts.has_login() {
-            hub.set_status(Status::NeedsRelogin);
+            // Seen from its first packet, the login was there to read: in a protocol this build does not know yet.
+            hub.set_status(if self.connected { Status::NeedsUpdate } else { Status::NeedsRelogin });
         }
     }
 
@@ -61,6 +64,7 @@ impl Decoder {
             let (conv_id, result) = match packet {
                 GamePacket::Connection(ConnectionPacket::HandshakeEstablished { conv_id }) => {
                     info!(conv_id, "game connected");
+                    self.connected = true;
                     if !hub.is_synced() {
                         hub.set_status(Status::GameFound);
                     }
@@ -68,6 +72,7 @@ impl Decoder {
                 }
                 GamePacket::Connection(ConnectionPacket::Disconnected) => {
                     info!("game disconnected");
+                    self.connected = false;
                     if !hub.is_synced() {
                         hub.set_status(Status::WaitingForGame);
                     }
@@ -200,6 +205,34 @@ mod tests {
     fn wearers(items: &Value) -> HashMap<String, String> {
         let text = |v: &Value| v.as_str().map_or_else(|| v.to_string(), str::to_owned);
         items.as_array().unwrap().iter().map(|item| (text(&item["_uid"]), text(&item["location"]))).collect()
+    }
+
+    /// A UDP packet from the game's server with `payload`, as an Ethernet frame.
+    fn server_udp(payload: &[u8]) -> Vec<u8> {
+        let mut ip = vec![0x45, 0, 0, 0, 0, 0, 0, 0, 64, 17, 0, 0, 10, 0, 0, 1, 10, 0, 0, 2];
+        ip[2..4].copy_from_slice(&((28 + payload.len()) as u16).to_be_bytes());
+        ip.extend(23301u16.to_be_bytes());
+        ip.extend(50000u16.to_be_bytes());
+        ip.extend(((8 + payload.len()) as u16).to_be_bytes());
+        ip.extend([0, 0]);
+        ip.extend(payload);
+        sync_core::packets::ethernet_frame(0x0800, &ip)
+    }
+
+    #[test]
+    fn a_login_watched_from_its_start_but_unreadable_asks_for_an_update_not_a_relogin() {
+        let (hub, mut decoder) = (Hub::new(None), Decoder::default());
+        decoder.key_missing(&hub);
+        assert_eq!(*hub.status().borrow(), Status::NeedsRelogin, "joined mid-session: the login came before the app");
+
+        let handshake = [&[0, 0, 1, 0x45][..], &433012u32.to_be_bytes(), &[0; 12]].concat();
+        decoder.frame(&hub, server_udp(&handshake));
+        decoder.key_missing(&hub);
+        assert_eq!(*hub.status().borrow(), Status::NeedsUpdate, "the connection opened in view, yet no key: a new protocol");
+
+        decoder.frame(&hub, server_udp(&[&404u32.to_be_bytes()[..], &[0; 16]].concat()));
+        decoder.key_missing(&hub);
+        assert_eq!(*hub.status().borrow(), Status::NeedsRelogin, "after a disconnect, the next login has not been seen yet");
     }
 
     #[test]
