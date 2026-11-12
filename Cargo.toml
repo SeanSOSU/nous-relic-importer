@@ -3,7 +3,7 @@ members = ["android/engine", "core", "decoder", "live", "tools/release"]
 
 [package]
 name = "nous-relic-importer"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2024"
 license = "MIT"
 description = "Keeps StarRailSim's relic inventory in step with your game account, read from the game's own network traffic"
@@ -11,7 +11,7 @@ description = "Keeps StarRailSim's relic inventory in step with your game accoun
 [dependencies]
 # The packet decoder. Its protobuf types change with every game version: on each patch,
 # tools/update-reliquary.ps1 sets this tag, core's (both entries) and the decoder's to Reliquary's new one.
-reliquary = { git = "https://github.com/IceDynamix/reliquary", tag = "v24.0.0", features = ["proto-rqa"] }
+reliquary = { git = "https://github.com/IceDynamix/reliquary", tag = "v25.0.0", features = ["proto-rqa"] }
 sync-core = { path = "core", features = ["stream"] }
 sync-live = { path = "live" }
 

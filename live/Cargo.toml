@@ -7,7 +7,7 @@ description = "The live importer the desktop and Android apps share: the game's 
 
 [dependencies]
 # Keep this tag the same as the app's, core's and the decoder's; tools/update-reliquary.ps1 sets all of them.
-reliquary = { git = "https://github.com/IceDynamix/reliquary", tag = "v24.0.0", features = ["proto-rqa"] }
+reliquary = { git = "https://github.com/IceDynamix/reliquary", tag = "v25.0.0", features = ["proto-rqa"] }
 sync-core = { path = "../core", features = ["stream"] }
 
 axum = { version = "0.8", features = ["ws"] }

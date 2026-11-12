@@ -2042,7 +2042,7 @@ checksum = "650eef8c711430f1a879fdd01d4745a7deea475becfb90269c06775983bbf086"
 
 [[package]]
 name = "nous-relic-importer"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "axum",
  "futures",
@@ -2797,8 +2797,8 @@ checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
 name = "reliquary"
-version = "24.0.0"
-source = "git+https://github.com/IceDynamix/reliquary?tag=v24.0.0#0b8c1d4f8eb5ae9722b5c3273e36a464b7188a38"
+version = "25.0.0"
+source = "git+https://github.com/IceDynamix/reliquary?tag=v25.0.0#ba9319be47e406ef5bf52c6b7b04b859c65a8026"
 dependencies = [
  "base64 0.22.1",
  "etherparse 0.17.0",
@@ -2815,8 +2815,8 @@ dependencies = [
 
 [[package]]
 name = "reliquary-proc-macro"
-version = "0.1.1"
-source = "git+https://github.com/IceDynamix/reliquary?tag=v24.0.0#0b8c1d4f8eb5ae9722b5c3273e36a464b7188a38"
+version = "0.1.2"
+source = "git+https://github.com/IceDynamix/reliquary?tag=v25.0.0#ba9319be47e406ef5bf52c6b7b04b859c65a8026"
 dependencies = [
  "quote",
  "syn 2.0.119",
