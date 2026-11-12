@@ -4,9 +4,10 @@
 # reliquary-<tag> when the protocol moved (tools/update-reliquary.ps1, and the newest game data with it), otherwise
 # gamedata-<commit>. A move some branch already carries is not prepared again, so game data that moves after a
 # protocol branch was made gets a gamedata-<commit> of its own. It raises the patch version, runs
-# `cargo test --workspace` and `cargo build --release`, and commits whatever they said. It reports with a Windows
-# notification and target/patch-check/<branch>.md, and logs every run in target/patch-check/patch-check.log. It never
-# pushes and never publishes.
+# `cargo test --workspace` and `cargo build --release`, and commits whatever they said. When the release build
+# passes, tools/publish-candidate.ps1 puts the branch on the test channel as a GitHub pre-release. It reports with a
+# Windows notification and target/patch-check/<branch>.md, and logs every run in target/patch-check/patch-check.log.
+# It never pushes main and never makes a full release.
 #
 #   .\tools\patch-check.ps1 -DryRun                            # what it would do now
 #   .\tools\patch-check.ps1 -Register -Jobs 2 -Affinity FFFF0  # weekly, cargo with two jobs on CPUs 4-19 (a hex mask)
@@ -216,17 +217,25 @@ try {
         "The capture tests replay decoder/tests/emulator-login.pcap, recorded on the old protocol: record a PearlSR login " +
         "on the new one (``--emulator --record``), put it in that file's place and set the counts its tests expect. "
     } else { "" }
+    $candidate = "not published: the release build did not pass"
+    if ($build -eq "passed") {
+        $extra = @{}
+        if ($Affinity) { $extra.Affinity = $Affinity }
+        & (Join-Path $PSScriptRoot "publish-candidate.ps1") -Ref $branch -Worktree $Worktree -Jobs $Jobs @extra
+        $candidate = if ($LASTEXITCODE) { "publishing failed: see target\candidates\candidates.log" } else { "on the test channel as a pre-release" }
+    }
+    $results += "- release candidate: $candidate"
     $report = Join-Path $out "$branch.md"
     $news = if ($protocol) { "reliquary $newest is out" } else { "the game data moved to $($data.title)" }
     [IO.File]::WriteAllText($report, ((@(
         "# $news", "",
         "Prepared $(Get-Date -Format 'yyyy-MM-dd HH:mm') on branch ``$branch`` (commit $commit), checked out in $Worktree.",
-        "Nothing was pushed or published.", "") + $results + @("",
+        "Main was not pushed, and nothing was released.", "") + $results + @("",
         "Logs: $testLog and $buildLog.") + $said + @("",
-        "Review it with ``git diff main $branch``. $($recording)Merge it into main and publish it as README.md's " +
-        """Publishing a release"" says.")) -join "`n") + "`n")
+        "Review it with ``git diff main $branch``. $($recording)Merge it into main; promoting its candidate to a " +
+        "release is README.md's ""Publishing a release"".")) -join "`n") + "`n")
     Write-Log "Prepared $branch ($commit). Tests: $tests. Release build: $build. Report: $report"
-    Send-Notification "Nous Relic Importer: $news" "Branch $branch is prepared in $Worktree. Tests: $tests. Release build: $build." $report
+    Send-Notification "Nous Relic Importer: $news" "Branch $branch is prepared in $Worktree. Tests: $tests. Release build: $build. Candidate: $candidate." $report
 } catch {
     Write-Log "Failed: $_"
     if (-not $DryRun) { Send-Notification "Nous Relic Importer patch check failed" "$_" (Join-Path $out "patch-check.log") }

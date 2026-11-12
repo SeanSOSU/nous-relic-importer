@@ -35,6 +35,8 @@ const MARK: &str = concat!("nous-relic-importer-version:", env!("CARGO_PKG_VERSI
 const FIRST_CHECK: Duration = Duration::from_secs(5);
 const FIRST_CHECK_AT_SIGN_IN: Duration = Duration::from_secs(90);
 const EVERY: Duration = Duration::from_secs(6 * 3600);
+/// A copy on the test channel (any feed but the public one) checks this often, so a candidate reaches it soon.
+const EVERY_TESTING: Duration = Duration::from_secs(15 * 60);
 const RETRY: Duration = Duration::from_secs(30 * 60);
 /// How long the game must have been quiet before an update installs by itself.
 const QUIET: Duration = Duration::from_secs(5 * 60);
@@ -166,6 +168,10 @@ impl Plan {
     }
 }
 
+fn every(feed: &str) -> Duration {
+    if feed == crate::UPDATE_FEED { EVERY } else { EVERY_TESTING }
+}
+
 fn release_key(text: &str) -> Option<PublicKey> {
     let line = text.lines().map(str::trim).rfind(|l| !l.is_empty() && !l.starts_with("untrusted comment:"))?;
     PublicKey::from_base64(line).ok()
@@ -258,7 +264,7 @@ impl Worker {
                 Err(mpsc::RecvTimeoutError::Disconnected) => return,
             }
             if Instant::now() >= next_check {
-                next_check = Instant::now() + if self.check() { EVERY } else { RETRY };
+                next_check = Instant::now() + if self.check() { every(&self.plan.feed) } else { RETRY.min(every(&self.plan.feed)) };
             }
             if self.waiting_to_install() && self.hub.game_quiet_for(QUIET) {
                 self.install(true);
@@ -687,6 +693,7 @@ mod tests {
         assert!(!newer("0.1.0", "0.1.0") && !newer("0.1.0", "0.2.0") && !newer("0.2", "0.1.0") && !newer("0.2.0-beta", "0.1.0"));
         assert!(allowed(crate::UPDATE_FEED) && allowed("http://127.0.0.1:8765/latest.json") && allowed("http://localhost/x"));
         assert!(!allowed("http://example.com/latest.json") && !allowed("http://127.0.0.1.example.com/x") && !allowed("ftp://x"));
+        assert!(every(crate::UPDATE_FEED) == EVERY && every(crate::TEST_FEED) == EVERY_TESTING, "only the test channel checks often");
         assert_eq!(version(), env!("CARGO_PKG_VERSION"));
         assert!(release_key(include_str!("../update-key.pub")).is_some(), "the committed release key reads");
     }

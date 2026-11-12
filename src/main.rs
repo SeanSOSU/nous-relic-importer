@@ -29,6 +29,8 @@ pub const APP_NAME: &str = "Nous Relic Importer";
 const DEFAULT_SITE: &str = "https://starrailsim.com/import?sync=1";
 /// Where every copy looks for a newer one: the latest GitHub release's feed, as `nri-release sign` writes it.
 pub const UPDATE_FEED: &str = "https://github.com/SeanSOSU/nous-relic-importer/releases/latest/download/latest.json";
+/// The test channel (`--test-channel`): the newest release candidate, a GitHub pre-release the public feed never names.
+pub const TEST_FEED: &str = "https://github.com/SeanSOSU/nous-relic-importer/releases/download/test-channel/latest.json";
 pub const PORT: u16 = 23314;
 
 struct Options {
@@ -95,6 +97,7 @@ impl Options {
                 "--allow-origin" => options.allow_origins.extend(args.next()),
                 "--replay" => options.replay = args.next().map(PathBuf::from),
                 "--update-feed" => options.update_feed = args.next().unwrap_or(options.update_feed),
+                "--test-channel" => options.update_feed = TEST_FEED.to_owned(),
                 other => tracing::warn!(other, "unknown argument"),
             }
         }

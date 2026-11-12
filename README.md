@@ -97,7 +97,8 @@ updates** and the window's **Check now** read the feed at once. The window shows
 | `--background` | Start without the window (what the sign-in task passes) |
 | `--emulator` | Test against the PearlSR emulator instead of the live game (no admin, nothing installed) |
 | `--grant-capture` | Linux: what the password prompt runs, as root, to give the installed copy CAP_NET_RAW |
-| `--update-feed <url>` | Read updates from this feed instead of the latest GitHub release's (HTTPS, or HTTP to this machine) |
+| `--update-feed <url>` | Read updates from this feed instead of the latest GitHub release's (HTTPS, or HTTP to this machine); any feed but the public one is checked every 15 minutes |
+| `--test-channel` | Follow the test channel: every release candidate, before it is released (see "Test channel") |
 | `--update` | What the updater runs a downloaded version with: replace the installed copy and start it |
 
 ## Testing without a live account
@@ -158,12 +159,30 @@ makes a local branch, `reliquary-<tag>`, in a worktree beside the repo (`<repo>-
 version, then `cargo test --workspace` and the Windows `cargo build --release` there, committed whatever they say.
 When TurnBasedGameData has moved past `main`'s `core/gamedata.rev` with no new Reliquary tag, or since that tag's branch
 was made (the game's data can land before Reliquary's tag, and a hotfix can add items without one), it does the same
-with step 4 alone on a branch `gamedata-<commit>`. It
-reports with a Windows notification and `target/patch-check/<branch>.md`, and never pushes or publishes.
+with step 4 alone on a branch `gamedata-<commit>`. When the release build passes, it puts the branch on the test
+channel (below). It reports with a Windows notification and `target/patch-check/<branch>.md`, and never pushes `main`
+or makes a full release.
 `-DryRun` says what it would do. `-Register -Jobs 2 -Affinity FFFF0` makes it a weekly scheduled task for the
 signed-in user (Thursdays at 10:00, or as soon as it can after a missed one) whose cargo runs two jobs on the CPUs in
 that hex mask; `Start-ScheduledTask "Nous Relic Importer patch check"` runs it now. Each run adds a line to
 `target/patch-check/patch-check.log`.
+
+### The test channel
+
+Every version reaches a few copies before it reaches everyone, through the same updater. `tools/publish-candidate.ps1`
+builds a commit whose version no release or pre-release has yet, signs it with the release key, pushes its tag
+`v<version>` and publishes it as a **GitHub pre-release**, then uploads that release's `latest.json` to the fixed
+pre-release `test-channel`. Copies started with `--test-channel` read that feed, every 15 minutes, and install the
+candidate the way every copy installs a release. Every other copy reads only `releases/latest`, which is never a
+pre-release, so it never sees a candidate. A candidate is published once: each new one needs a new version, so
+versions a candidate never got past are skipped in the releases.
+
+It runs by itself: `tools/patch-check.ps1` calls it for each branch whose release build passed, and `-Register -Jobs 2
+-Affinity FFFF0` makes it an hourly task for `main` ("Nous Relic Importer candidates"), which publishes `main` once it
+carries a new version. `-DryRun` says what it would do. Each run adds a line to `target/candidates/candidates.log`.
+
+To join, start the installed copy with `--test-channel` once (or add it to the "Nous Relic Importer" sign-in task's
+arguments); an update keeps the copy's arguments.
 
 ### Publishing a release
 
@@ -195,6 +214,11 @@ update-key.pub` makes a new one, protected by a password if you add `--password`
    `apksigner verify --print-certs dist/nous-relic-importer.apk` should name `CN=Nous Relic Importer`.
 4. Publish `dist/` as that release: `gh release create v0.2.0 dist/* --title "Nous Relic Importer 0.2.0"`. The installed
    copies read `releases/latest/download/latest.json`, so the newest release must not be a draft or prerelease.
+
+**Releasing a candidate** keeps the Windows build the test channel ran. Build the Linux one and the APK at the
+candidate's commit, sign both builds into `dist/` as in step 2 (the Windows one from the candidate's release), upload
+the Linux build, its `.minisig`, the APK and the new `latest.json` over the candidate's (`gh release upload v0.2.2 ...
+--clobber`), then `gh release edit v0.2.2 --prerelease=false --latest --title "Nous Relic Importer 0.2.2"`.
 
 `cargo run -p nri-release -- verify <download>`, with the download's `.minisig` beside it, checks a download by hand
 and says what it is signed as (`minisign -Vm <download> -p update-key.pub` does too).
