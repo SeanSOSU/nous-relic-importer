@@ -181,7 +181,7 @@ mod tests {
             }
             let status = hub.status().borrow().clone();
             assert!(
-                matches!(status, Status::Synced { relics: 558, fresh: true, .. }),
+                matches!(status, Status::Synced { relics: 564, fresh: true, .. }),
                 "the recorded login came out as {status:?}: on a new protocol it needs a new emulator recording"
             );
             let (template, seq) = end.unwrap();
@@ -248,7 +248,7 @@ mod tests {
         session.send(sync);
         let update = pages.try_recv().expect("the page gets the change, with no new login");
         assert!(update.contains(r#""event":"UpdateRelics""#) && update.contains("9000001"), "{update}");
-        assert_eq!(session.hub.summary().unwrap().relics, 559);
+        assert_eq!(session.hub.summary().unwrap().relics, 565);
 
         // One the account had, upgraded: changed in place, not added.
         let mut upgraded = session.bag.relic_list[1].clone();
@@ -258,7 +258,7 @@ mod tests {
         session.send(sync);
         let update = pages.try_recv().unwrap();
         assert!(update.contains(&upgraded.unique_id.to_string()) && update.contains(r#""level":15"#), "{update}");
-        assert!(matches!(*session.hub.status().borrow(), Status::Synced { relics: 559, fresh: true, .. }));
+        assert!(matches!(*session.hub.status().borrow(), Status::Synced { relics: 565, fresh: true, .. }));
     }
 
     #[test]
@@ -294,7 +294,7 @@ mod tests {
         let after = session.account();
         let worn_after = wearers(&after["relics"]);
         assert_eq!((&worn_after[&a_id], &worn_after[&b_id]), (&worn_before[&b_id], &worn_before[&a_id]));
-        assert_eq!(after["relics"].as_array().unwrap().len(), 558);
+        assert_eq!(after["relics"].as_array().unwrap().len(), 564);
 
         // Light cones the same way.
         let cones: Vec<_> = session.bag.equipment_list.iter().filter(|c| c.equip_avatar_id != 0).collect();
@@ -333,9 +333,9 @@ mod tests {
         assert_eq!(ids(&update), salvaged.iter().map(u32::to_string).collect::<Vec<_>>());
         // A page that opens now, and the saved account, no longer have them.
         let left = wearers(&session.account()["relics"]);
-        assert_eq!(left.len(), 555);
+        assert_eq!(left.len(), 561);
         assert!(salvaged.iter().all(|id| !left.contains_key(&id.to_string())));
-        assert!(matches!(*session.hub.status().borrow(), Status::Synced { relics: 555, fresh: true, .. }));
+        assert!(matches!(*session.hub.status().borrow(), Status::Synced { relics: 561, fresh: true, .. }));
 
         // A light cone fed to another as experience goes the same way.
         let used = session.bag.equipment_list[0].unique_id;

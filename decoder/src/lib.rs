@@ -156,8 +156,8 @@ mod tests {
         let decoded = decode(&capture).expect("the recorded login does not decode: on a new protocol it needs a new emulator recording");
         let export: serde_json::Value = serde_json::from_str(&decoded).unwrap();
         assert_eq!(export["metadata"]["trailblazer"], "Caelus");
-        assert_eq!(export["relics"].as_array().unwrap().len(), 558);
-        assert_eq!(export["light_cones"].as_array().unwrap().len(), 93);
-        assert_eq!(export["characters"].as_array().unwrap().len(), 93);
+        assert_eq!(export["relics"].as_array().unwrap().len(), 564);
+        assert_eq!(export["light_cones"].as_array().unwrap().len(), 94);
+        assert_eq!(export["characters"].as_array().unwrap().len(), 94);
     }
 }

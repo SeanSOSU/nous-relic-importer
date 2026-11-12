@@ -39,7 +39,7 @@ echo "installed, granted, running as pid $PID with no capabilities left"
 
 echo "== the recorded login, replayed onto loopback"
 $E2E inject "$PCAP"
-wait_for "$E2E site ws://127.0.0.1:23314/ws http://localhost:5173 2>/dev/null | grep -q '\"relics\": 558'"
+wait_for "$E2E site ws://127.0.0.1:23314/ws http://localhost:5173 2>/dev/null | grep -q '\"relics\": 564'"
 $E2E site ws://127.0.0.1:23314/ws http://localhost:5173
 $E2E refused ws://127.0.0.1:23314/ws https://evil.test || fail "another site's page was let in"
 wait_for "[ -s $H/.local/state/nous-relic-importer/last-import.json ]"
@@ -58,7 +58,7 @@ $E2E refused "ws://127.0.0.1:23314/ui?token=$TOKEN" https://evil.test || fail "a
 
 echo "== the window's controls"
 $E2E window "ws://127.0.0.1:23314/ui?token=$TOKEN" http://127.0.0.1:23314 startup-off startup-on | tee /tmp/window.json
-grep -q '"headline": "Synced 558 relics"' /tmp/window.json || fail "the window's headline"
+grep -q '"headline": "Synced 564 relics"' /tmp/window.json || fail "the window's headline"
 grep -q '"startup": false' /tmp/window.json || fail "startup-off"
 [ -f "$H/.config/autostart/nous-relic-importer.desktop" ] || fail "startup-on did not put the autostart entry back"
 
@@ -68,7 +68,7 @@ EVENTS=$!
 sleep 1
 $E2E window "ws://127.0.0.1:23314/ui?token=$TOKEN" http://127.0.0.1:23314 sending-off sending-on | tee /tmp/sending.json
 wait $EVENTS
-[ "$(tr '\n' ' ' < /tmp/events.txt)" = "Status:synced InitialScan:558 Paused InitialScan:558 " ] || fail "the page saw: $(tr '\n' ' ' < /tmp/events.txt)"
+[ "$(tr '\n' ' ' < /tmp/events.txt)" = "Status:synced InitialScan:564 Paused InitialScan:564 " ] || fail "the page saw: $(tr '\n' ' ' < /tmp/events.txt)"
 grep -q '"sending": false.*Auto import is off\|Auto import is off.*"sending": false' /tmp/sending.json \
   || fail "the window does not say sending is off"
 grep -q '"sendToSite":true' "$H/.local/state/nous-relic-importer/settings.json" || fail "the switch was not kept for the next start"
