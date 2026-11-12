@@ -12,7 +12,8 @@
 param(
     [string]$Ref = "main",
     [string]$Worktree = "$(Split-Path -Parent $PSScriptRoot)-candidate",
-    [string]$Key = "$(Split-Path -Parent $PSScriptRoot)-keys\update-signing.key",
+    # Default: update-signing.key in the folder beside the main checkout, <repo>-keys.
+    [string]$Key,
     [ValidateRange(1, 64)][int]$Jobs = 2,
     [ValidatePattern('^[0-9A-Fa-f]{1,16}$')][string]$Affinity,
     [switch]$DryRun,
@@ -22,6 +23,10 @@ $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 
 $repo = Split-Path -Parent $PSScriptRoot
+if (-not $Key) {
+    $common = (git -C $repo rev-parse --path-format=absolute --git-common-dir) | Select-Object -First 1
+    $Key = Join-Path "$(Split-Path -Parent ([IO.Path]::GetFullPath($common)))-keys" "update-signing.key"
+}
 $out = Join-Path $repo "target\candidates"
 $taskName = "Nous Relic Importer candidates"
 $channel = "test-channel"
@@ -106,7 +111,7 @@ try {
     $published = @(Invoke-Gh release list --repo $slug --limit 200 --json tagName --jq '.[].tagName')
     if ($published -contains $tag) { Write-Host "$Ref ($version) is already published."; return }
     $newest = $published | Where-Object { Get-Version $_ } | Sort-Object { Get-Version $_ } | Select-Object -Last 1
-    if ($newest -and (Get-Version $tag) -le (Get-Version $newest)) { Write-Host "$Ref ($version) is not newer than $newest: nothing to publish."; return }
+    if ($newest -and (Get-Version $tag) -le (Get-Version $newest)) { Write-Host "$Ref ($version) is not newer than ${newest}: nothing to publish."; return }
     if (-not (Test-Path -LiteralPath $Key)) { throw "no release key at $Key" }
     $short = $commit.Substring(0, 7)
     if ($DryRun) {
