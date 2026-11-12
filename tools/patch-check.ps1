@@ -33,8 +33,10 @@ if ($Register) {
     if ($Affinity) { $arguments += " -Affinity $Affinity" }
     $task = @{
         TaskName = $taskName
-        Description = "When Reliquary tags a new game protocol, prepares Nous Relic Importer's update on a local branch and reports it. Never pushes."
-        Action = New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -Argument $arguments -WorkingDirectory $repo
+        Description = "When Reliquary tags a new game protocol, prepares Nous Relic Importer's update on a branch and puts it on the test channel. Never pushes main."
+        # Through conhost --headless: even a hidden PowerShell window flashes on the desktop each run.
+        Action = New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\conhost.exe" -WorkingDirectory $repo `
+            -Argument "--headless `"$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe`" $arguments"
         Trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Thursday -At "10:00"
         Settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -RunOnlyIfNetworkAvailable -AllowStartIfOnBatteries `
             -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Hours 4)
