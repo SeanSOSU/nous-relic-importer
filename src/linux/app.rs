@@ -111,6 +111,7 @@ pub fn run(hub: Hub, updater: Updater, launch: Launch, work: Work, quit: Signal,
         let forward = actions_tx.clone();
         std::thread::spawn(move || {
             quit.wait();
+            tracing::info!("asked to quit");
             forward.send(Action::Quit).ok();
         });
 

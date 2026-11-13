@@ -38,6 +38,9 @@ const EVERY: Duration = Duration::from_secs(6 * 3600);
 /// A copy on the test channel (any feed but the public one) checks this often, so a candidate reaches it soon.
 const EVERY_TESTING: Duration = Duration::from_secs(15 * 60);
 const RETRY: Duration = Duration::from_secs(30 * 60);
+/// How long a new copy waits for the running one to quit once asked. It is on its way out by then, so giving up
+/// early leaves nothing running (11-12: a copy took over 20 s to let go).
+const STEP_ASIDE: Duration = Duration::from_secs(3 * 60);
 /// How long the game must have been quiet before an update installs by itself.
 const QUIET: Duration = Duration::from_secs(5 * 60);
 /// A version that would not install is not downloaded again for this long.
@@ -487,9 +490,13 @@ pub fn take_over(args: &[String]) -> bool {
     #[cfg(windows)]
     use crate::win::{Signal, SingleInstance};
 
-    if SingleInstance::other_running() && !Signal::quit_and_wait(Duration::from_secs(20)) {
-        warn!("the running copy did not quit; the update waits for the next try");
-        return false;
+    if SingleInstance::other_running() {
+        let asked = Instant::now();
+        if !Signal::quit_and_wait(STEP_ASIDE) {
+            warn!("the running copy did not quit; the update waits for the next try");
+            return false;
+        }
+        info!(seconds = asked.elapsed().as_secs_f32(), "the running copy stepped aside");
     }
     let target = install::installed_exe();
     match replace(&target) {

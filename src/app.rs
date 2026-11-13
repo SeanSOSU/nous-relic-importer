@@ -189,6 +189,7 @@ pub fn run(hub: Hub, updater: Updater, launch: Launch, quit: Signal, show_signal
     let forward = proxy.clone();
     std::thread::spawn(move || {
         quit.wait();
+        tracing::info!("asked to quit");
         forward.send_event(UserEvent::Quit).ok();
     });
     let forward = proxy.clone();
